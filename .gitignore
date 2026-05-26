@@ -1,0 +1,16 @@
+node_modules/
+npm-debug.log
+
+.env
+.env.*
+
+.expo/
+.rncache
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.keystore
+*.jks
+ios/Pods/
+ios/build/

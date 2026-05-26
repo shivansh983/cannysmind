@@ -1,0 +1,392 @@
+
+---
+
+## 1. What is React Native?
+
+```
+Normal React (Web)          React Native (Mobile)
+──────────────────          ─────────────────────
+runs in a browser           runs on a phone
+makes HTML elements         makes native UI elements
+<div>, <p>, <button>        <View>, <Text>, <TouchableOpacity>
+renders to a webpage        renders to iOS / Android
+```
+
+The key idea — **you write JavaScript/TypeScript, but the phone renders real native components.** Not a website wrapped in a browser. Actual native Android/iOS views.
+
+---
+
+## 2. TypeScript vs JavaScript
+
+Your app uses TypeScript (`.tsx` files). The difference:
+
+```ts
+// JavaScript — no types, no safety
+function greet(name) {
+  return 'Hello ' + name;
+}
+greet(123); // works, but wrong — no warning
+
+// TypeScript — types protect you
+function greet(name: string): string {
+  return 'Hello ' + name;
+}
+greet(123); // ❌ ERROR caught before app even runs
+```
+
+TypeScript is just JavaScript with a safety net. Every variable, function, and component prop has a declared type. That's why you saw those 50 "implicitly has any type" errors earlier — TypeScript was saying "I don't know what type this is, tell me."
+
+---
+
+## 3. How React Native renders your screen
+
+Everything on screen is a **component** — a function that returns UI:
+
+```ts
+// A component is just a function that returns UI
+function MyCard() {
+  return (
+    <View style={{ padding: 16, backgroundColor: 'white' }}>
+      <Text>Hello!</Text>
+    </View>
+  );
+}
+```
+
+React Native's core building blocks:
+
+```
+View              → like a <div> — a container box
+Text              → like a <p>  — shows text
+TextInput         → like <input> — user can type
+TouchableOpacity  → like <button> — tappable, fades on press
+ScrollView        → scrollable container
+FlatList          → efficient scrollable LIST of items
+SafeAreaView      → stays away from notch/status bar
+```
+
+---
+
+## 4. State — how your app remembers things
+
+`useState` is how a component remembers values that can change:
+
+```ts
+const [username, setUsername] = useState('');
+//     ↑ current value   ↑ function to change it   ↑ starting value
+
+// When user types, we update state:
+<TextInput
+  value={username}              // shows current value
+  onChangeText={t => setUsername(t)}  // updates it on every keystroke
+/>
+```
+
+Every time state changes → React re-renders the component → screen updates. This is the entire mental model of React.
+
+---
+
+## 5. The flow of your app
+
+```
+App starts
+    │
+    ▼
+AuthProvider loads
+    │
+    ├── Checks AsyncStorage for saved session cookie
+    │       │
+    │       ├── Cookie found → show Dashboard (AppTabs)
+    │       │
+    │       └── No cookie → show Login/Signup screens
+    │
+    ▼
+User on Login screen
+    │
+    ├── Types userName + password
+    ├── Presses "Sign in"
+    ├── validate() runs → checks fields aren't empty
+    ├── api.post('/auth/login', { userName, password })
+    │       │
+    │       ├── Backend validates → finds user → checks password
+    │       ├── Creates Redis session → returns cookieValue
+    │       │
+    │       ▼
+    ├── login(cookieValue) called
+    │       ├── Saves cookieValue to AsyncStorage (permanent storage)
+    │       └── Sets cookie in AuthContext state
+    │
+    ▼
+cookie is now set → Root navigator switches to AppTabs automatically
+```
+
+---
+
+## 6. What is Context?
+
+Context is like a **global variable** that any component can read without passing props down through every level:
+
+```ts
+// Without context — prop drilling hell:
+<App user={user}>
+  <Dashboard user={user}>
+    <TaskList user={user}>
+      <TaskCard user={user} />   // passed through 3 levels just to get here
+    </TaskList>
+  </Dashboard>
+</App>
+
+// With context — any component just calls useAuth():
+function ProfileScreen() {
+  const { cookie, logout } = useAuth(); // grabs it directly, no props needed
+}
+```
+
+In your app, `AuthContext` holds the session cookie and is available to every screen.
+
+---
+
+## 7. Navigation — how screens work
+
+You have two navigators:
+
+```
+NavigationContainer (the wrapper)
+    │
+    ├── AuthStackNav (when NOT logged in)
+    │       ├── Login screen
+    │       └── Signup screen
+    │
+    └── AppTabs (when logged in — bottom tab bar)
+            ├── Tasks screen
+            ├── Analytics screen
+            ├── Settings screen
+            └── Profile screen
+```
+
+The switch between them is automatic:
+```ts
+// In Root component:
+{cookie
+  ? <AppTabs />        // has cookie = logged in
+  : <AuthStackNav />   // no cookie = show login
+}
+```
+
+When you call `login(cookieValue)`, `cookie` goes from `null` to a string, React detects the change, and the whole navigator switches instantly.
+
+---
+
+## 8. What is hardcoded vs real API data
+
+Here's the honest breakdown of your current app:
+
+```
+REAL (hits your actual backend)     HARDCODED (fake data)
+────────────────────────────────    ──────────────────────────────
+✅ Signup → POST /api/auth/signup   ❌ Analytics numbers (24, 14, 6)
+✅ Login  → POST /api/auth/login    ❌ Analytics bar percentages
+✅ Logout → POST /api/auth/logout   ❌ Settings rows (static list)
+✅ Tasks  → GET  /api/tasks         ❌ DUMMY tasks (fallback only)
+✅ Mark complete → PATCH /api/tasks/:id/complete
+```
+
+The dummy tasks are a **fallback** — if the API call fails, you see dummy data instead of a blank screen. Once your backend `/tasks` endpoint returns real data, the real tasks show automatically.
+
+---
+
+## 9. How the cookie auth works end to end
+
+```
+SIGNUP                          LOGIN
+──────                          ─────
+1. Fill form                    1. Enter userName + password
+2. POST /api/auth/signup        2. POST /api/auth/login
+   body: {                         body: {
+     name, userName,                 userName,
+     email, phone, password          password
+   }                              }
+3. Backend creates User         3. Backend checks password (bcrypt)
+   in Postgres                  4. Creates session in Redis:
+4. Returns:                        key: "app:userId:hashedToken"
+   { message: 'User created' }     value: session data
+                                5. Returns:
+                                   { cookieValue: "userId.token" }
+                                6. App saves cookieValue to
+                                   AsyncStorage
+                                7. Attaches it as Cookie header
+                                   on every future request:
+                                   Cookie: sessionId=userId.token
+```
+
+---
+
+## 10. AsyncStorage — the phone's hard drive
+
+```ts
+// Saves data permanently on the phone (survives app restarts)
+await AsyncStorage.setItem('session_cookie', cookieValue);
+
+// Reads it back
+const saved = await AsyncStorage.getItem('session_cookie');
+
+// Deletes it (on logout)
+await AsyncStorage.removeItem('session_cookie');
+```
+
+This is why you stay logged in after closing and reopening the app. 
+The cookie is saved on the phone. On startup, `AuthProvider` reads it and if it exists, 
+skips the login screen.
+
+---
+
+## 11. StyleSheet — how styling works
+
+React Native has no CSS. Styles are JavaScript objects:
+
+```ts
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,      // rounded corners
+    padding: 16,           // space inside
+    marginBottom: 16,      // space outside below
+    // shadows (iOS)
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    // shadows (Android)
+    elevation: 4,
+  }
+});
+
+// Used like:
+<View style={styles.card}>
+```
+
+Dynamic styles (based on state or theme) are merged in arrays:
+```ts
+<View style={[
+  styles.input,                           // base style always
+  focused && styles.inputFocused,         // added when focused
+  error ? styles.inputError : null,       // added when error exists
+]} />
+```
+
+---
+
+## 12. The theme system in your app
+
+Your app supports dark/light mode automatically:
+
+```ts
+const scheme = useColorScheme(); // returns 'dark' or 'light'
+const theme = scheme === 'dark' ? DARK : LIGHT;
+
+// Then every color references the theme:
+<Text style={{ color: theme.text }}>Hello</Text>
+//                     ↑ white in dark mode, black in light mode
+```
+
+`LIGHT` and `DARK` are just plain objects with colour values. When the phone switches mode, `useColorScheme()` returns a new value, the component re-renders, and everything recolours.
+
+---
+
+## 13. FlatList — the right way to render lists
+
+```ts
+// WRONG for long lists — renders ALL items at once, kills performance:
+tasks.map(task => <TaskCard task={task} />)
+
+// CORRECT — only renders what's visible on screen:
+<FlatList
+  data={tasks}              // the array
+  keyExtractor={item => item.id}   // unique key for each item
+  renderItem={({ item }) => <TaskCard item={item} />}  // how to render each
+  numColumns={2}            // for grid layout
+/>
+```
+
+FlatList is like a smart window — it only renders the items you can actually see, recycling components as you scroll.
+
+---
+
+## 14. What to learn next for Android development
+
+In order of importance:
+
+```
+1. React hooks deeply          useState, useEffect, useRef, useContext
+2. TypeScript basics           interfaces, types, generics
+3. React Navigation            stack, tabs, drawer navigators
+4. Async/await & fetch         all API calls use this
+5. AsyncStorage                local persistence
+6. Flexbox layout              how ALL positioning works in RN
+7. React Native Reanimated     smooth animations
+8. Form handling               validation patterns
+9. Error boundaries            graceful crash handling
+10. Expo vs bare RN            understand the difference
+```
+
+The single most important thing — **understand Flexbox**. Every layout in React Native is Flexbox. No floats, no grid (CSS grid), no absolute positioning by default. Just `flexDirection`, `justifyContent`, and `alignItems`.
+
+```ts
+// This centers anything:
+<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+  <Text>I am perfectly centered</Text>
+</View>
+```
+
+---
+
+## 15. The complete request lifecycle in your app
+
+When you tap "Create account":
+
+```
+1. Button onPress fires
+2. validate() runs — checks all fields locally
+3. If valid → setLoading(true) → spinner shows on button
+4. fetch() sends HTTP POST to 10.0.2.2:8000/api/auth/signup
+5. Request travels: Emulator → PC network → Express server
+6. Express → validateZod middleware runs your Zod schema
+7. If valid → registerClient() called → bcrypt hashes password
+8. Sequelize INSERT into Postgres Users table
+9. Response comes back: { message: 'User created successfully' }
+10. App shows Alert → navigates to Login
+11. setLoading(false) → button returns to normal
+```
+
+If anything in steps 5-9 fails, the catch block runs and shows an error alert. That's the complete picture.
+
+
+// ─── PACKAGES TO INSTALL ─────────────────────────────────────────────────────
+// npm install @react-navigation/bottom-tabs
+// npm install @react-native-async-storage/async-storage
+// npm install react-native-svg
+// npx pod-install   ← iOS only
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+//
+// YOUR BACKEND AUTH FLOW (from your controller.js):
+//   POST /auth/signup → body uses "userName" (camelCase), NOT "username"
+//   POST /auth/login  → returns { cookieValue: "clientId.token" }
+//                       AND sets httpOnly cookie "sessionId"
+//   POST /auth/logout → needs cookie "sessionId" in header
+//   GET  /tasks       → needs cookie "sessionId" in header
+//
+// React Native fetch() does NOT auto-send cookies like a browser.
+// Solution: we manually save the cookieValue string from login response
+// and attach it as a Cookie header on every protected request.
+
+
+
+// ─── TASKS ────────────────────────────────────────────────────────────────────
+//
+// Task fields from your task.js model:
+//   id (6-char alphanumeric), name, description, isActive,
+//   startedAt, completedAt, duration (virtual), userId, approverId
+//
+// GET /tasks returns: { tasks: [...] }
+// POST /tasks body: { name, description?, approverId? }
+// PATCH /tasks/:id/complete → marks completedAt, isActive=false
