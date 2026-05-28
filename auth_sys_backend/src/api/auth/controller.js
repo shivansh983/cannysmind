@@ -52,7 +52,8 @@ async function login(req, res) {
 
     const { userName, password } = validation.data;
     
-    const { clientId, token } = await loginClient(userName, password);
+    // We now extract 'role' from your login service as well
+    const { clientId, token, role } = await loginClient(userName, password);
 
     const cookieValue = `${clientId}.${token}`;
 
@@ -62,7 +63,15 @@ async function login(req, res) {
       maxAge: 24 * 60 * 60 * 1000
     });
 
-    return res.status(200).json({ message: 'Login successful', cookieValue });
+    // THIS IS THE FIX: We send the user object back with the cookie
+    return res.status(200).json({ 
+      message: 'Login successful', 
+      cookieValue,
+      user: {
+        id: clientId,
+        role: role || 'user' // Default to 'user' if not found
+      }
+    });
   } catch (error) {
     if (error.message === 'INVALID_CREDENTIALS') return res.status(401).json({ error: 'Invalid username or password' });
     console.error(error);
@@ -85,7 +94,6 @@ async function logout(req, res) {
       const clientId = parts[0];
       const token = parts[1];
       console.log("parts,clientI,token")
-
 
       const hashedSessionToken = crypto.createHash('sha256').update(token).digest('hex');
       console.log('DELETING KEY:', `app:${clientId}:${hashedSessionToken}`);

@@ -1,0 +1,962 @@
+This is going to be a comprehensive deep dive. Let me teach you everything properly.
+
+---
+
+# PART 1 — How Code Becomes an App
+
+Before learning syntax, you need to understand what actually happens when you press "Run".
+
+```
+YOUR CODE (JavaScript/TypeScript)
+         │
+         ▼
+    Metro Bundler
+    (reads all your .js/.ts files,
+     bundles them into one big file)
+         │
+         ▼
+    JavaScript Engine
+    (Hermes on Android, JavaScriptCore on iOS)
+    (runs your JS logic)
+         │
+         ▼
+    React Native Bridge
+    (translates JS commands into
+     native platform calls)
+         │
+    ┌────┴────┐
+    ▼         ▼
+ Android      iOS
+ (Java/      (Swift/
+  Kotlin)     ObjC)
+    │              │
+    ▼              ▼
+ Real native    Real native
+ Android UI     iOS UI
+```
+
+Your JavaScript never directly touches the screen. It sends instructions through the bridge. React Native converts `<View>` → `android.widget.FrameLayout` on Android, and `UIView` on iOS. This is why the same code runs on both platforms.
+
+---
+
+# PART 2 — The Files in Your Project
+
+When you run `npx react-native init MyApp`, it generates this structure. Every folder has a specific purpose.
+
+```
+MyApp/
+│
+├── android/                 ← The actual Android Studio project
+│   ├── app/
+│   │   ├── src/
+│   │   │   └── main/
+│   │   │       ├── java/    ← Native Android Java/Kotlin code
+│   │   │       ├── res/     ← Icons, images, strings, colours
+│   │   │       └── AndroidManifest.xml  ← App permissions & config
+│   │   └── build.gradle     ← Android app-level build config
+│   ├── build.gradle         ← Android project-level build config
+│   └── gradle/              ← Gradle wrapper files
+│
+├── ios/                     ← The actual Xcode project
+│   ├── MyApp/
+│   │   ├── AppDelegate.swift  ← iOS app entry point
+│   │   └── Info.plist         ← iOS permissions & config
+│   └── Podfile              ← iOS dependency manager (CocoaPods)
+│
+├── src/                     ← YOUR CODE lives here
+│   └── App.tsx
+│
+├── node_modules/            ← All installed npm packages
+├── package.json             ← Your project's dependency list
+├── tsconfig.json            ← TypeScript configuration
+├── metro.config.js          ← Metro bundler configuration
+└── babel.config.js          ← JavaScript transpiler config
+```
+
+---
+
+## Why does `android/` exist if you write JavaScript?
+
+Because React Native is not a web app. When you install a package like `react-native-svg`, it has two parts:
+
+```
+react-native-svg/
+├── src/          ← JavaScript part (the API you use in code)
+├── android/      ← Android-specific native code (Java/Kotlin)
+└── ios/          ← iOS-specific native code (Swift/ObjC)
+```
+
+The JavaScript calls the native code through the bridge. This is why you need to run `pod install` on iOS — it compiles the native iOS part of the library.
+
+---
+
+# PART 3 — Gradle Deep Dive
+
+Gradle is the build system for Android. Think of it as the factory manager — it knows how to take your raw materials (code, images, config) and assemble them into a finished product (the `.apk` file).
+
+## The two build.gradle files
+
+```
+android/
+├── build.gradle         ← PROJECT level (global settings)
+└── app/
+    └── build.gradle     ← APP level (your actual app settings)
+```
+
+**Project-level `build.gradle`** — sets up the build environment:
+
+```groovy
+// android/build.gradle
+buildscript {
+  ext {
+    buildToolsVersion = "34.0.0"
+    minSdkVersion = 23        // minimum Android version you support
+    compileSdkVersion = 34    // Android SDK version used to compile
+    targetSdkVersion = 34     // Android version you're targeting
+  }
+  repositories {
+    google()       // where to download Android dependencies from
+    mavenCentral() // another package repository
+  }
+  dependencies {
+    // The Android Gradle Plugin — teaches Gradle how to build Android apps
+    classpath("com.android.tools.build:gradle:8.1.0")
+  }
+}
+```
+
+**App-level `build.gradle`** — configures your specific app:
+
+```groovy
+// android/app/build.gradle
+android {
+  compileSdk 34
+
+  defaultConfig {
+    applicationId "com.myapp"  // unique ID on Google Play Store
+    minSdk 23                  // won't install on Android below 6.0
+    targetSdk 34
+    versionCode 1              // internal version number (integer)
+    versionName "1.0"          // displayed version ("1.0.3")
+  }
+
+  buildTypes {
+    debug {
+      // What happens when you run during development
+      debuggable true
+    }
+    release {
+      // What happens when you build for the Play Store
+      minifyEnabled true      // removes unused code
+      shrinkResources true    // removes unused images/files
+      proguardFiles ...       // code obfuscation rules
+    }
+  }
+}
+
+dependencies {
+  // Libraries your app needs
+  implementation "com.facebook.react:react-android"
+  implementation "com.facebook.soloader:soloader:0.10.5"
+}
+```
+
+## What Gradle actually does step by step
+
+```
+Step 1: RESOLVE DEPENDENCIES
+       Reads build.gradle, downloads all libraries from the internet
+       Stores them in ~/.gradle/caches/ (that's why first build takes forever)
+
+Step 2: COMPILE
+       Converts your Java/Kotlin code → bytecode (.class files)
+
+Step 3: DEX CONVERSION
+       Converts bytecode → Dalvik Executable (.dex)
+       Android doesn't run normal JVM bytecode — it runs .dex files
+       on the ART (Android Runtime)
+
+Step 4: PACKAGE RESOURCES
+       Compresses images, layouts, strings into binary format
+
+Step 5: SIGN
+       Adds a digital signature (required by Android to install)
+       Debug builds use a debug keystore automatically
+       Release builds need your own keystore file
+
+Step 6: ASSEMBLE
+       Zips everything into a .apk (or .aab for Play Store)
+```
+
+## The Gradle Wrapper
+
+You never install Gradle globally. Each project ships with its own Gradle version:
+
+```
+android/
+└── gradle/
+    └── wrapper/
+        ├── gradle-wrapper.jar        ← downloads the right Gradle version
+        └── gradle-wrapper.properties ← specifies WHICH version to use
+```
+
+This is why you run `./gradlew` (Mac/Linux) or `gradlew.bat` (Windows) instead of just `gradle`. The wrapper ensures everyone on your team uses the exact same Gradle version regardless of what's installed on their computer.
+
+---
+
+# PART 4 — React Native Core Concepts
+
+## Components
+
+Everything in React Native is a component. A component is a function that returns UI.
+
+```tsx
+// Simplest possible component
+function MyText() {
+  return <Text>Hello world</Text>;
+}
+
+// Component with props (inputs)
+function Greeting({ name, age }: { name: string; age: number }) {
+  return (
+    <View>
+      <Text>Hello {name}</Text>
+      <Text>You are {age} years old</Text>
+    </View>
+  );
+}
+
+// Using it
+<Greeting name="Shivansh" age={20} />
+```
+
+## JSX
+
+JSX is not HTML. It looks like HTML but compiles to JavaScript:
+
+```tsx
+// What you write (JSX):
+<View style={{ padding: 16 }}>
+  <Text>Hello</Text>
+</View>
+
+// What it actually compiles to:
+React.createElement(View, { style: { padding: 16 } },
+  React.createElement(Text, null, "Hello")
+)
+```
+
+## The 6 Core Layout Components
+
+```tsx
+// VIEW — the box. Like a div. Does nothing by itself.
+<View style={{ flex: 1, backgroundColor: 'red' }} />
+
+// TEXT — the only component that can display text
+<Text style={{ fontSize: 16, color: '#000' }}>Hello</Text>
+
+// TEXTINPUT — keyboard input
+<TextInput
+  value={text}
+  onChangeText={t => setText(t)}
+  placeholder="Type here"
+  secureTextEntry={true}  // for passwords
+  keyboardType="email-address"
+/>
+
+// TOUCHABLEOPACITY — pressable, fades on press
+<TouchableOpacity onPress={() => console.log('pressed')} activeOpacity={0.7}>
+  <Text>Press me</Text>
+</TouchableOpacity>
+
+// SCROLLVIEW — scrollable container. Renders ALL children at once.
+// Use for short lists (settings, forms)
+<ScrollView>
+  <Text>Item 1</Text>
+  <Text>Item 2</Text>
+</ScrollView>
+
+// FLATLIST — scrollable list. Only renders what's visible.
+// Use for long lists (tasks, messages, products)
+<FlatList
+  data={myArray}
+  keyExtractor={item => item.id}
+  renderItem={({ item }) => <Text>{item.name}</Text>}
+/>
+```
+
+---
+
+# PART 5 — React Hooks In Depth
+
+Hooks are functions that give your component superpowers.
+
+## useState — remember values
+
+```tsx
+const [count, setCount] = useState(0);
+//     ↑ value  ↑ setter  ↑ initial value
+
+// Reading: just use count
+<Text>{count}</Text>
+
+// Writing: always use the setter, never modify directly
+setCount(5);          // set to 5
+setCount(c => c + 1); // set based on previous value (safer)
+
+// WRONG — never do this:
+count = 5; // this won't trigger a re-render
+```
+
+## useEffect — run code at specific times
+
+```tsx
+// 1. Run ONCE when component mounts (like componentDidMount)
+useEffect(() => {
+  fetchData();
+}, []); // ← empty array means "run once"
+
+// 2. Run when a value changes
+useEffect(() => {
+  console.log('username changed to:', username);
+}, [username]); // ← runs whenever username changes
+
+// 3. Run on every render (rarely used)
+useEffect(() => {
+  console.log('rendered');
+}); // ← no array at all
+
+// 4. Cleanup function (runs when component unmounts)
+useEffect(() => {
+  const timer = setInterval(() => tick(), 1000);
+  return () => clearInterval(timer); // ← cleanup
+}, []);
+```
+
+## useRef — value that doesn't cause re-renders
+
+```tsx
+// Use case 1: store a value without triggering re-render
+const count = useRef(0);
+count.current++; // changing this doesn't re-render
+
+// Use case 2: animations (Animated.Value lives in a ref)
+const opacity = useRef(new Animated.Value(1)).current;
+
+// Use case 3: access a DOM element (focus a TextInput)
+const inputRef = useRef<TextInput>(null);
+<TextInput ref={inputRef} />
+inputRef.current?.focus(); // programmatically focus it
+```
+
+## useContext — share data without props
+
+```tsx
+// 1. Create the context
+const ThemeContext = createContext<'light' | 'dark'>('light');
+
+// 2. Provide it high up in your tree
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <MyScreen />
+    </ThemeContext.Provider>
+  );
+}
+
+// 3. Consume it anywhere inside the tree
+function MyScreen() {
+  const theme = useContext(ThemeContext);
+  // theme === 'dark'
+}
+```
+
+---
+
+# PART 6 — Flexbox Layout (the only layout system in RN)
+
+React Native uses Flexbox for ALL positioning. There is no CSS grid, no floats, no absolute positioning by default.
+
+```tsx
+// CRITICAL: In React Native, flexDirection defaults to 'column'
+// In CSS (web), flexDirection defaults to 'row'
+
+// Centering something — the most common pattern
+<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+  <Text>I am perfectly centered</Text>
+</View>
+
+// flex: 1 means "take all available space"
+// justifyContent controls the MAIN axis (column = vertical by default)
+// alignItems controls the CROSS axis (column = horizontal by default)
+
+// Row layout — side by side
+<View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+  <Text>Left</Text>
+  <Text>Right</Text>
+</View>
+
+// Proportional sizing with flex
+<View style={{ flex: 1, flexDirection: 'row' }}>
+  <View style={{ flex: 1, backgroundColor: 'red' }}  />  // takes 1/3
+  <View style={{ flex: 2, backgroundColor: 'blue' }} />  // takes 2/3
+</View>
+```
+
+---
+
+# PART 7 — TypeScript in React Native
+
+TypeScript adds a type system on top of JavaScript. It catches errors before your app runs.
+
+## Basic types
+
+```tsx
+// Primitives
+const name: string = 'Shivansh';
+const age: number = 20;
+const isActive: boolean = true;
+const nothing: null = null;
+
+// Arrays
+const names: string[] = ['Alice', 'Bob'];
+const numbers: number[] = [1, 2, 3];
+
+// Objects — use interfaces
+interface User {
+  id: string;
+  name: string;
+  age?: number;  // ← ? means optional
+}
+
+const user: User = { id: '123', name: 'Alice' };
+
+// Union types — can be one of several types
+type Status = 'pending' | 'approved' | 'rejected';
+let taskStatus: Status = 'pending';
+taskStatus = 'invalid'; // ← TypeScript error!
+
+// Generics — reusable types with a placeholder
+function getFirst<T>(arr: T[]): T {
+  return arr[0];
+}
+getFirst<string>(['a', 'b']); // returns string
+getFirst<number>([1, 2, 3]);  // returns number
+```
+
+## Typing component props
+
+```tsx
+// Define the shape of props
+interface CardProps {
+  title: string;
+  subtitle?: string;    // optional
+  onPress: () => void;  // function that returns nothing
+  count: number;
+}
+
+// Use them
+function Card({ title, subtitle, onPress, count }: CardProps) {
+  return (
+    <TouchableOpacity onPress={onPress}>
+      <Text>{title}</Text>
+      {subtitle && <Text>{subtitle}</Text>}
+      <Text>{count}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// TypeScript will error if you forget required props
+<Card title="Hello" onPress={() => {}} count={5} />
+```
+
+---
+
+# PART 8 — Navigation
+
+React Navigation is the standard way to move between screens.
+
+## Stack Navigator — screens stack on top of each other
+
+```tsx
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+// 1. Define what screens exist and their params
+type RootStack = {
+  Home: undefined;                    // no params
+  Profile: { userId: string };        // requires userId
+  Settings: { theme?: 'dark' | 'light' }; // optional param
+};
+
+const Stack = createNativeStackNavigator<RootStack>();
+
+// 2. Set up the navigator
+function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="Home">
+        <Stack.Screen name="Home"     component={HomeScreen}    />
+        <Stack.Screen name="Profile"  component={ProfileScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'My Settings' }} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+// 3. Navigate between screens
+function HomeScreen({ navigation }) {
+  return (
+    <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: '123' })}>
+      <Text>Go to Profile</Text>
+    </TouchableOpacity>
+  );
+}
+
+// 4. Read params in the destination screen
+function ProfileScreen({ route }) {
+  const { userId } = route.params; // userId === '123'
+}
+```
+
+## Tab Navigator — bottom tab bar
+
+```tsx
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+const Tab = createBottomTabNavigator();
+
+function AppTabs() {
+  return (
+    <Tab.Navigator>
+      <Tab.Screen name="Home"    component={HomeScreen}    />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
+```
+
+---
+
+# PART 9 — Async/Await and API calls
+
+All network requests are asynchronous — they take time, so you can't block the UI waiting for them.
+
+```tsx
+// async/await is syntactic sugar over Promises
+// WRONG — synchronous thinking (doesn't work for API calls):
+const data = fetch('https://api.example.com/tasks'); // returns a Promise, not data
+
+// CORRECT — wait for the Promise to resolve:
+async function loadTasks() {
+  try {
+    const response = await fetch('https://api.example.com/tasks');
+    // response is now the HTTP response object
+
+    const data = await response.json();
+    // data is now the parsed JSON object
+
+    console.log(data.tasks); // ['task1', 'task2']
+  } catch (error) {
+    // any error (network down, server error, JSON parse error) lands here
+    console.error('Failed:', error);
+  }
+}
+
+// The full pattern used in your app:
+useEffect(() => {
+  // useEffect can't be async itself, so we define async inside
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/tasks`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cookie}`,
+        },
+      });
+
+      if (!res.ok) {
+        // HTTP error (404, 401, 500)
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
+      setTasks(json.tasks);
+    } catch (e) {
+      Alert.alert('Error', 'Could not load tasks');
+    } finally {
+      setLoading(false); // always runs, success or failure
+    }
+  };
+
+  load();
+}, []);
+```
+
+---
+
+# PART 10 — Node.js and Express
+
+## What Node.js actually is
+
+Node.js is JavaScript that runs on your server instead of in a browser. The key difference:
+
+```
+Browser JS:
+  - Can access the DOM (document, window)
+  - Cannot access the file system
+  - Cannot listen on network ports
+  - Sandboxed for security
+
+Node.js:
+  - No DOM (no document, no window)
+  - CAN access the file system (fs module)
+  - CAN listen on ports (net, http modules)
+  - Full system access
+```
+
+## Express — the web framework
+
+Express handles HTTP requests. Every request goes through a pipeline of middleware functions:
+
+```js
+const express = require('express');
+const app = express();
+
+// Middleware runs on EVERY request (in order)
+app.use(express.json());      // parses JSON body
+app.use(express.urlencoded()); // parses form data
+app.use(cors());              // adds CORS headers
+
+// Route handlers run on SPECIFIC requests
+// Structure: app.METHOD(PATH, ...MIDDLEWARE, HANDLER)
+app.get('/users', async (req, res) => {
+  // req = incoming request
+  // res = outgoing response
+  const users = await db.User.findAll();
+  res.status(200).json({ users }); // send JSON response
+});
+
+app.post('/users', async (req, res) => {
+  const { name, email } = req.body; // body was parsed by express.json()
+  const user = await db.User.create({ name, email });
+  res.status(201).json({ user });
+});
+
+app.get('/users/:id', async (req, res) => {
+  const { id } = req.params;    // from the URL: /users/123
+  const { page } = req.query;  // from ?page=2
+  const user = await db.User.findByPk(id);
+  res.json({ user });
+});
+
+app.listen(8000, () => console.log('Server running on port 8000'));
+```
+
+## Middleware explained
+
+Middleware is just a function with three parameters: `(req, res, next)`:
+
+```js
+// A middleware that logs every request
+function logger(req, res, next) {
+  console.log(`${req.method} ${req.path} at ${new Date()}`);
+  next(); // MUST call next() or the request stops here forever
+}
+
+// A middleware that checks authentication
+function protect(req, res, next) {
+  const token = req.headers.authorization;
+  if (!token) {
+    return res.status(401).json({ error: 'No token' });
+    // Notice: no next() here — request is rejected
+  }
+  req.user = { id: 'abc123' }; // attach data for next middleware
+  next(); // pass to the next middleware or route handler
+}
+
+// Chain them together
+app.get('/tasks', logger, protect, async (req, res) => {
+  // Only reaches here if protect() called next()
+  console.log(req.user.id); // 'abc123' — set by protect middleware
+  res.json({ tasks: [] });
+});
+```
+
+---
+
+# PART 11 — Sequelize ORM
+
+An ORM (Object Relational Mapper) lets you work with database records as JavaScript objects instead of writing raw SQL.
+
+```js
+// WITHOUT ORM — raw SQL:
+const result = await pool.query(
+  'SELECT * FROM "Tasks" WHERE "userId" = $1 ORDER BY "createdAt" DESC',
+  [userId]
+);
+
+// WITH Sequelize ORM — JavaScript:
+const tasks = await db.Task.findAll({
+  where: { userId: userId },
+  order: [['createdAt', 'DESC']],
+});
+// Both do exactly the same thing under the hood
+```
+
+## Model definition
+
+```js
+// A model is a JavaScript class that maps to a database table
+class Task extends Model {}
+
+Task.init({
+  // Each property maps to a database column
+  id: {
+    type: DataTypes.UUID,
+    primaryKey: true,
+    defaultValue: DataTypes.UUIDV4, // auto-generates UUID
+  },
+  name: {
+    type: DataTypes.STRING,   // VARCHAR(255)
+    allowNull: false,         // NOT NULL constraint
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  description: DataTypes.TEXT, // shorthand when no extra config needed
+}, {
+  sequelize,      // the database connection
+  tableName: 'Tasks',
+  modelName: 'Task',
+});
+```
+
+## The 4 CRUD operations
+
+```js
+// CREATE — INSERT INTO
+const task = await db.Task.create({
+  name: 'Build the API',
+  userId: 'uuid-123',
+});
+console.log(task.id); // auto-generated UUID
+
+// READ — SELECT
+const all   = await db.Task.findAll();                    // all rows
+const one   = await db.Task.findByPk('uuid-123');         // by primary key
+const first = await db.Task.findOne({ where: { name: 'Build' } }); // first match
+
+// With conditions:
+const active = await db.Task.findAll({
+  where: { isActive: true, userId: 'abc' },
+  order: [['createdAt', 'DESC']],
+  limit: 10,
+  include: [{ model: db.User, as: 'owner' }], // JOIN
+});
+
+// UPDATE — UPDATE SET
+task.name = 'Updated name';
+task.isActive = false;
+await task.save();    // only saves changed fields
+
+// Or update without fetching first:
+await db.Task.update(
+  { isActive: false },               // what to set
+  { where: { userId: 'uuid-123' } }  // which rows
+);
+
+// DELETE — DELETE FROM
+await task.destroy();
+
+// Or delete without fetching:
+await db.Task.destroy({ where: { id: 'uuid-123' } });
+```
+
+---
+
+# PART 12 — Redis (your session store)
+
+Redis is an in-memory key-value store. Think of it as a dictionary that lives in RAM — extremely fast but not for complex queries.
+
+```
+PostgreSQL                     Redis
+──────────────────────────     ──────────────────────────
+Stores data on disk            Stores data in RAM
+Survives server restarts       Gone if server restarts (by default)
+Complex queries (SQL)          Only key-value lookup
+Slower (disk I/O)              Extremely fast
+Good for: user data, tasks     Good for: sessions, caches, rate limits
+```
+
+Your app uses Redis like this:
+
+```js
+// On login — store the session
+const key = `app:${userId}:${hashedToken}`;
+await redis.set(key, JSON.stringify({ userId, loginAt: Date.now() }));
+await redis.expire(key, 86400); // expires in 24 hours
+
+// On every protected request — check the session
+const session = await redis.get(key);
+if (!session) return res.status(401).json({ error: 'Session expired' });
+
+// On logout — delete the session
+await redis.del(key);
+```
+
+---
+
+# PART 13 — The Android Build Pipeline in Full Detail
+
+When you run `npx react-native run-android`, here's every step:
+
+```
+Step 1: Metro Bundler starts
+        Reads index.js → follows all imports → bundles into one JS file
+        This is your "business logic" bundle
+
+Step 2: Gradle builds the Android app
+        Compiles Java/Kotlin native code
+        Packages your app's resources (icons, strings, etc.)
+        Copies the Metro JS bundle INTO the APK
+
+Step 3: APK is assembled
+        Signed with a debug key
+        Pushed to the emulator via ADB (Android Debug Bridge)
+
+Step 4: App launches on emulator
+        Android runs the Java entry point (MainActivity.java)
+        MainActivity starts the React Native runtime
+        The JS bundle is loaded and executed by the Hermes engine
+        Your React component tree renders to native Android views
+```
+
+## The AndroidManifest.xml
+
+Every Android app must declare its permissions and components here:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Permissions your app needs -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.CAMERA" />
+
+  <application
+    android:name=".MainApplication"
+    android:label="@string/app_name"    <!-- the app name on the phone -->
+    android:icon="@mipmap/ic_launcher"  <!-- the app icon -->
+    android:theme="@style/AppTheme">
+
+    <!-- The main screen of your app -->
+    <activity android:name=".MainActivity">
+      <intent-filter>
+        <!-- This makes it the app that launches when tapped -->
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+
+  </application>
+</manifest>
+```
+
+---
+
+# PART 14 — iOS Build Pipeline
+
+iOS works differently from Android. Instead of Gradle, it uses:
+
+```
+CocoaPods     → dependency manager (like npm but for iOS libraries)
+Xcode         → the IDE and build tool
+xcodebuild    → the command-line build tool
+
+Your Podfile (ios/Podfile) lists native iOS dependencies:
+  pod 'React-Core'
+  pod 'RNSvg'         ← react-native-svg's iOS part
+  pod 'RNSVG'
+
+Running `npx pod-install`:
+  → reads Podfile
+  → downloads all pods (native iOS libraries)
+  → generates Podfile.lock (like package-lock.json)
+  → creates .xcworkspace (the Xcode project you open)
+```
+
+## Why `pod install` is needed after installing packages
+
+```
+npm install react-native-svg
+        ↓
+Downloads the JS part + the native iOS part
+BUT the native iOS part isn't compiled yet
+
+pod install
+        ↓
+Reads the new dependency
+Downloads the Xcode project files
+Links them into your iOS build
+
+Without pod install → Xcode doesn't know the native library exists
+```
+
+---
+
+# PART 15 — Key Things to Remember
+
+## The mental model
+
+```
+React Native is NOT a web app wrapped in a browser.
+React Native is NOT compiling JS to Java/Swift.
+
+React Native runs JavaScript in a JS engine (Hermes),
+which talks to native platform code via a bridge.
+Your JS code says "create a box" and the bridge
+tells Android/iOS to create a real native view.
+```
+
+## The most common beginner mistakes
+
+```
+1. Modifying state directly
+   WRONG:  user.name = 'Alice';
+   RIGHT:  setUser({ ...user, name: 'Alice' });
+
+2. Async in useEffect without handling it
+   WRONG:  useEffect(async () => { ... }, []);
+   RIGHT:  useEffect(() => { const fn = async () => {}; fn(); }, []);
+
+3. Missing dependency arrays
+   useEffect(() => { load(userId); }); // runs on EVERY render
+   useEffect(() => { load(userId); }, [userId]); // runs when userId changes
+
+4. Mutating arrays
+   WRONG:  tasks.push(newTask); setTasks(tasks);
+   RIGHT:  setTasks([...tasks, newTask]);
+
+5. Using index as key in FlatList
+   WRONG:  keyExtractor={(_, index) => index.toString()}
+   RIGHT:  keyExtractor={item => item.id}
+   (index keys cause bugs when list items reorder)
+```
+
+## The complete stack your app uses
+
+```
+React Native (UI framework)
+    ↕ communicates via bridge
+Android (Java/Kotlin) / iOS (Swift/ObjC)
+    ↕ HTTP requests
+Express.js (web framework)
+    ↕ queries via Sequelize ORM
+PostgreSQL (relational database — stores users, tasks)
+    ↕ key-value lookups
+Redis (session store — stores login sessions)
+```
+
+Every layer has one job. React Native draws the UI. Express handles HTTP. Sequelize talks to Postgres. Redis stores sessions. They're all connected but each one is replaceable — you could swap Express for Fastify, or Postgres for MySQL, and the other layers wouldn't care.

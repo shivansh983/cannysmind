@@ -2,6 +2,9 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const {Model} = require('sequelize') 
+const commentRoutes = require('./api/comments/routes'); 
+const logRoutes = require('./api/logs/routes');
+
 require('dotenv').config({ path: '../.env' });
 
 

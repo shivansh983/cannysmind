@@ -390,3 +390,9 @@ If anything in steps 5-9 fails, the catch block runs and shows an error alert. T
 // GET /tasks returns: { tasks: [...] }
 // POST /tasks body: { name, description?, approverId? }
 // PATCH /tasks/:id/complete → marks completedAt, isActive=false
+
+###############################################################################
+
+1. admin(comment on task,crud)
+2. status
+3. manager(admin and user interaction manager can see,view,edit)

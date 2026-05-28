@@ -4,15 +4,14 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Task extends Model {
     static associate(models) {
-      Task.belongsTo(models.User, { foreignKey: 'userId', as: 'owner' });
-      Task.belongsTo(models.User, { foreignKey: 'approverId', as: 'approver' });
+      // The Top-Down Hierarchy
+      Task.belongsTo(models.User, { foreignKey: 'userId', as: 'creator' });
+      Task.belongsTo(models.User, { foreignKey: 'managerId', as: 'manager' });
+      Task.belongsTo(models.User, { foreignKey: 'assigneeId', as: 'assignee' });
 
-      Task.belongsToMany(models.User, {
-        through: 'TaskMembers',
-        as: 'joinedUsers',
-        foreignKey: 'taskId',
-        otherKey: 'userId',
-      });
+      // The Discussion & History
+      Task.hasMany(models.Comment, { foreignKey: 'taskId', as: 'comments' });
+      Task.hasMany(models.TaskLog, { foreignKey: 'taskId', as: 'logs' });
     }
   }
 
@@ -30,23 +29,18 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
-
-    approvalStatus: {
+    
+    // --- NEW JIRA STATUS ---
+    status: {
       type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: 'approved',
+      defaultValue: 'open',
       validate: {
         isIn: {
-          args: [['pending', 'approved', 'rejected']],
-          msg: 'approvalStatus must be pending, approved, or rejected',
+          args: [['open', 'claimed', 'assigned', 'in-progress', 'completed', 'reopened']],
+          msg: 'Invalid status',
         },
       },
-    },
-
-    maxUsers: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 5,
     },
 
     startedAt: {
@@ -66,11 +60,11 @@ module.exports = (sequelize, DataTypes) => {
         return 'Pending';
       },
     },
-    userId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-    },
-    approverId: DataTypes.UUID,
+    
+    // --- NEW JIRA ASSIGNMENTS ---
+    userId: { type: DataTypes.UUID, allowNull: false },      // Admin who created it
+    managerId: { type: DataTypes.UUID, allowNull: true },    // Manager who claimed it
+    assigneeId: { type: DataTypes.UUID, allowNull: true },   // User doing the work
 
   }, {
     sequelize,
