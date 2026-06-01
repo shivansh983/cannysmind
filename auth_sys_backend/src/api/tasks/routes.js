@@ -7,7 +7,9 @@ const {
   claimTask, 
   assignTask, 
   updateStatus, 
-  reopenTask 
+  reopenTask,
+  updateTask,
+  deleteTask
 } = require('./controller');
 const { protect } = require('../../middleware/auth.middleware');
 const { requireRole } = require('../../middleware/role.middleware');
@@ -29,5 +31,9 @@ router.patch('/:id/status', protect, requireRole('user'), updateStatus);
 
 
 router.patch('/:id/reopen', protect, requireRole('admin', 'manager'), reopenTask);
+
+router.patch('/:id', protect, requireRole('admin'), updateTask);
+
+router.delete('/:id', protect, requireRole('admin'), deleteTask);
 
 module.exports = router;

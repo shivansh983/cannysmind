@@ -1,0 +1,36 @@
+# Dev Log & Architecture Notes
+
+Building this app was a lot of trial and error, especially when connecting the React Native frontend to the Node backend. Here is a breakdown of how the app actually works under the hood, followed by the major bugs I ran into and how I solved them.
+
+## Architecture & App Flow
+
+### How the pieces fit together
+The system is built on a standard 3-tier architecture. The mobile app is written in React Native. When a user does something (like clicking "Complete Task"), the app fires an HTTP request to my Node.js/Express REST API. 
+
+Before the API touches the database, the request goes through a custom authentication middleware. This middleware checks Redis to see if the user's session token is valid. If it is, the API talks to the PostgreSQL database using Sequelize, updates the task, and sends the new data back to the phone.
+
+### The Task Lifecycle (How the app is used)
+The entire flow of the app depends on the user's role. I designed it so tasks follow a strict path:
+1. **Creation:** An Admin creates a new task and sets a deadline. The task status is now Open.
+2. **Dispatching:** A Manager logs in, sees the Open task, and clicks "Claim". The status changes to Claimed. 
+3. **Delegation:** The Manager uses a search bar to find a specific worker by name and assigns it to them. The status becomes Assigned.
+4. **Execution:** The standard User logs in, sees the task on their board, and hits "Start Working" (status: In-Progress). When they are done, they mark it Completed.
+
+*Note: Every single time one of those buttons is pressed, the backend automatically generates a timestamped log entry so admins know exactly who did what.*
+
+## Bug Tracking
+
+### Bug 1: The Infinite "Session Expired" Loop
+* **The Problem:** I kept getting logged out immediately after logging in. The backend kept returning a 401 Session Expired error.
+* **The Fix:** It turned out to be a mismatch in how I was hashing tokens. The mobile app sent the token as `userId.secretToken`. My login route only saved the hash of the `secretToken` to Redis, but my auth middleware was hashing the entire `userId.secretToken` string. Since the hashes didn't match, Redis kept kicking me out. I updated the middleware to split the string at the period and only hash the secret part.
+
+### Bug 2: Missing Admin Comments
+* **The Problem:** Admins could post comments on tasks, but no one could see them on the discussion board. 
+* **The Fix:** I had accidentally left some old boilerplate code in the `GET /comments` route that was filtering the database to only return comments where `authorId` matched the currently logged-in user. I ripped that filter out so everyone can see all comments for a specific task.
+
+### Bug 3: Manager UX was awful
+* **The Problem:** As mentioned in the features doc, asking a manager to copy-paste a UUID to assign a task was a terrible workflow.
+* **The Fix:** Built a custom React Native component that triggers a search query when the user types. It maps over the results array and lets the manager just tap a name to assign the task.
+
+### Wrap up
+Getting the role-based logic and the database associations working properly was the hardest part of this project. Now that the core architecture is stable, adding new features (like the upcoming camera uploads) should be pretty straightforward.

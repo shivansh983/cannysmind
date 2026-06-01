@@ -1,7 +1,7 @@
 'use strict';
 
 const db = require('../../database/models');
-const { createTaskSchema } = require('./validator');
+const { createTaskSchema, updateTaskSchema } = require('./validator');
 
 // ─── GET TASKS (Role-Based Viewing) ─────────────────────────────
 async function getTasks(req, res) {
@@ -54,12 +54,14 @@ async function createTask(req, res) {
       });
     }
 
-    const { name, description } = req.body;
+    const { name, description, deadline, priority } = validation.data;
     const { id: userId } = req.user; // The Admin creating it
 
     const newTask = await db.Task.create({
       name,
       description,
+      deadline,
+      priority: priority || 'medium',
       userId,
       status: 'open' // Automatically opens the task for managers to see
     });
@@ -118,6 +120,9 @@ async function assignTask(req, res) {
     const task = await db.Task.findByPk(id);
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.managerId !== managerId) return res.status(403).json({ error: 'You do not manage this task' });
+
+    const assignee = await db.User.findOne({ where: { id: assigneeId, role: 'user' } });
+    if (!assignee) return res.status(400).json({ error: 'Assignee must be an existing standard user' });
 
     const oldStatus = task.status;
     task.assigneeId = assigneeId;
@@ -179,7 +184,7 @@ async function reopenTask(req, res) {
   try {
     const { id } = req.params;
     const { comment } = req.body; 
-    const { id: managerId } = req.user;
+    const { id: actorId, role } = req.user;
 
     if (!comment) {
       return res.status(400).json({ error: 'A comment is required to reopen a task' });
@@ -187,7 +192,8 @@ async function reopenTask(req, res) {
 
     const task = await db.Task.findByPk(id);
     if (!task) return res.status(404).json({ error: 'Task not found' });
-    if (task.managerId !== managerId) return res.status(403).json({ error: 'You do not manage this task' });
+    if (role === 'manager' && task.managerId !== actorId) return res.status(403).json({ error: 'You do not manage this task' });
+    if (task.status !== 'completed') return res.status(400).json({ error: 'Only completed tasks can be reopened' });
 
     const oldStatus = task.status;
     task.status = 'reopened';
@@ -197,18 +203,18 @@ async function reopenTask(req, res) {
     // Create the feedback comment
     await db.Comment.create({
       taskId: task.id,
-      authorId: managerId,
+      authorId: actorId,
       content: comment
     });
 
     // Write to Audit Log
     await db.TaskLog.create({
       taskId: task.id,
-      actorId: managerId,
+      actorId,
       action: 'TASK_REOPENED',
       fromStatus: oldStatus,
       toStatus: 'reopened',
-      note: 'Reopened with feedback comment'
+      note: comment
     });
 
     return res.status(200).json({ message: 'Task reopened', task });
@@ -217,22 +223,70 @@ async function reopenTask(req, res) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
-  // ... existing imports
-  async function updateTask(req, res) {
-    try {
-      const { id } = req.params;
-      await db.Task.update(req.body, { where: { id } });
-      res.json({ message: 'Task updated successfully' });
-    } catch (err) { res.status(500).json({ error: 'Update failed' }); }
-  }
+async function updateTask(req, res) {
+  try {
+    const { id } = req.params;
+    const validation = updateTaskSchema.safeParse(req.body);
 
-  async function deleteTask(req, res) {
-    try {
-      const { id } = req.params;
-      await db.Task.destroy({ where: { id } });
-      res.json({ message: 'Task deleted successfully' });
-    } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation Failed',
+        details: validation.error.issues,
+      });
+    }
+
+    const updates = validation.data;
+    const task = await db.Task.findByPk(id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const changedFields = [];
+    for (const key of ['name', 'description', 'deadline', 'priority']) {
+      if (Object.prototype.hasOwnProperty.call(updates, key)) {
+        task[key] = updates[key];
+        changedFields.push(key);
+      }
+    }
+
+    if (changedFields.length === 0) {
+      return res.status(400).json({ error: 'No editable fields provided' });
+    }
+
+    await task.save();
+
+    await db.TaskLog.create({
+      taskId: task.id,
+      actorId: req.user.id,
+      action: 'TASK_UPDATED',
+      note: `Updated ${changedFields.join(', ')}`
+    });
+
+    return res.json({ message: 'Task updated successfully', task });
+  } catch (err) {
+    console.error('Update Task Error:', err);
+    return res.status(500).json({ error: 'Update failed' });
   }
+}
+
+async function deleteTask(req, res) {
+  try {
+    const { id } = req.params;
+    const task = await db.Task.findByPk(id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    await db.TaskLog.create({
+      taskId: task.id,
+      actorId: req.user.id,
+      action: 'TASK_DELETED',
+      note: `Deleted task "${task.name}"`
+    });
+
+    await task.destroy();
+    return res.json({ message: 'Task deleted successfully' });
+  } catch (err) {
+    console.error('Delete Task Error:', err);
+    return res.status(500).json({ error: 'Delete failed' });
+  }
+}
 
 
 

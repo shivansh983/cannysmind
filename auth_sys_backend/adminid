@@ -1,0 +1,473 @@
+shivansh_admin
+Admin123!
+
+User
+testuser123
+
+
+ORM
+
+Sync and Async
+
+Postgresql
+
+(eslint)
+
+saas arch
+
+Sequelize(rdbc,odbc)
+
+Models
+
+Migrations
+
+Seeders
+
+Permission and Rights
+
+########################
+
+
+user , assign group (user create),financer (view / edit), accountant (create/can del group)
+
+serializer
+postgres
+
+
+################################
+
+in postgres should i use cloud or local
+if cloud any recomendation
+
+#############################
+
+duuid
+
+Boobalan S
+4:42 PM
+dont use id instead of this use UUID
+
+Boobalan S
+4:43 PM
+what are the concepts do you understand in this TASK ?
+
+Boobalan S
+4:48 PM
+dont write frontend and backend combined code
+write code seperately first check with postman then you need to inegrate with frontend
+
+Boobalan S
+4:51 PM
+PostgreSQL (Basics)
+
+* Tables, rows, columns
+* Primary key & foreign key
+* Basic SQL:
+
+  * `SELECT`
+  * `INSERT`
+  * `UPDATE`
+  * `DELETE`
+* Simple relationships (one-to-many)
+Sequelize ORM (Basics)
+
+* What is ORM
+* Define a model
+* Run migrations
+* CRUD methods:
+
+  * `create`
+  * `findAll`
+  * `findOne`
+  * `update`
+  * `destroy`
+* Basic associations (`belongsTo`, `hasMany`)
+
+Boobalan S
+4:57 PM
+Pagination, Search & Sorting (Intermediate)
+Objective
+Improve list APIs.
+Requirements
+Pagination (page, pageSize)
+Search by name
+Sort by createdAt, price
+Concepts Covered
+✅ Sequelize limit, offset
+✅ Op.iLike search
+✅ Dynamic sorting
+
+Boobalan S
+4:59 PM
+JavaScript (Basics)
+
+* Variables (`let`, `const`)
+* Functions & arrow functions
+* Objects & arrays
+* `map`, `filter`
+* `async / await`
+* `try / catch`
+
+Jawahar Bhaskaran
+5:01 PM
+node arrays.js
+
+Boobalan S
+5:03 PM
+we dont write code backend with frontend 
+
+we write separate code structure
+1.Authentication System
+
+Build:
+
+Signup
+Login
+JWT authentication
+Password hashing
+
+Learn:
+
+bcrypt
+JWT tokens
+Middleware
+
+Jawahar Bhaskaran
+5:04 PM
+BelongsTo
+hasMany
+hasOne
+
+Boobalan S
+5:04 PM
+2.Simple REST API
+
+Create APIs for:
+
+Users
+Products
+Tasks (Todo)
+
+Operations:
+
+GET
+POST
+PUT
+DELETE
+
+Learn:
+
+Express.js
+Routing
+JSON handling
+API testing (validation and rejects,regex)
+Task Management System
+
+Features:
+
+User login
+Create tasks
+Assign priorities
+Mark completed
+
+Tech:
+
+Node.js + Express + postgres
+
+Jawahar Bhaskaran
+5:05 PM
+config/database/models
+/migration
+/seeders
+
+Boobalan S
+5:12 PM
+Backend
+├── .env
+├── .gitignore
+├── package.json
+│
+└── src/
+    ├── server.js                  # App entry point (Express setup)
+    ├── routes.js                  # All route registrations
+    │
+    ├── config/
+    │   ├── constants.js           # App-wide constants
+    │   ├── errorCodes.js          # Error code definitions
+    │   └── successMessages.js     # Success message definitions
+    │
+    ├── database/
+    │   ├── models/                # Sequelize models (1 file per table)
+    │   │   ├── index.js           # Model loader & associations
+    │   │   ├── client.js
+    │   │   ├── file.js
+    │   │   └── role.js
+    │   ├── migrations/            # DB schema changes
+    │   └── seeders/               # Default/test data
+    │
+    ├── middleware/
+    │   ├── auth.js                # JWT authentication
+    │   └── validateZod.js         # Request body validation
+    │
+    ├── api/                       # Feature modules (1 folder per feature)
+    │   ├── users/
+    │   │   ├── routes.js          # GET /users, POST /users, etc.
+    │   │   ├── controller.js      # Handle req/res
+    │   │   ├── validator.js       # Zod schemas
+    │   │   └── services/          # Business logic (DB queries)
+    │   │       ├── list.js
+    │   │       ├── create.js
+    │   │       ├── update.js
+    │   │       └── delete.js
+    │   ├── login/
+    │   ├── roles/
+    │   ├── groups/
+
+Boobalan S
+5:15 PM
+use Zod validation
+
+Jawahar Bhaskaran
+5:34 PM
+app:userId:<token>
+
+Jawahar Bhaskaran
+5:42 PM
+.gitignore
+node_modules
+
+Jawahar Bhaskaran
+5:43 PM
+npm and pnpm
+
+#######################
+
+password hashing 16 char
+store jwt token in redis with time
+jwt algorithm 
+one 2 one/ 
+session table
+cookies
+request
+
+
+userName -> Camel
+user_name -> Snake Case
+UserName  -> Pascal Case
+
+Jawahar Bhaskaran
+4:50 PM
+audittrailparams
+4:51 PM
+auditTrailparam
+Hover over a message to pin it
+keep
+
+Jawahar Bhaskaran
+4:51 PM
+auditTrailParams
+4:52 PM
+audit_trail_params
+
+Jawahar Bhaskaran
+5:06 PM
+regex
+
+Jawahar Bhaskaran
+5:08 PM
+change table name 'User' -> 'Client'
+allownNull: 'false' -> 'true';
+
+###########################################
+Jawahar Bhaskaran
+4:14 PM
+use npm or pnpm , use to run in watch mode with hot reload
+
+Jawahar Bhaskaran
+4:31 PM
+In package.json scripts
+write the node --watch src/server.js
+and run it using pnpm dev
+
+Jawahar Bhaskaran
+5:08 PM
+KEYS *
+
+make a login , for token generated and saved in redis ,which saving redis should have the value of client id(primary key)
+change name
+redis db show (basic 10 cmds)
+migration
+git 
+
+##################################
+Jawahar Bhaskaran
+5:55 PM
+{type: Dtatype.STRING , allowNull: false}
+
+Jawahar Bhaskaran
+6:14 PM
+try{
+
+} catch (error){
+ console.error(error, 'Error in SignUp');
+}
+
+Jawahar Bhaskaran
+6:15 PM
+return { succes: true , data: {id:  clientId ,userName: client.userName };
+In controller 
+
+const result = service.signup( req, res) ;
+
+Jawahar Bhaskaran
+6:18 PM
+return res.status(200).json({ sucess:true,  data: {id:  clientId ,userName: client.userName } });
+return res.status(500).json({ sucess:false,  error:  error);
+
+
+################################
+
+
+
+
+Here 3 create users in client table
+
+Rename client table to user ( migration) 
+
+Then change code in signup ( models , signup code ) instead of Client -> user 
+
+now add one user
+
+Then change the second Migration file to update-user-to client and follow with 
+
+Login / logout redis revoke token for logout
+
+#####################################################
+
+restapi
+backend (Sequelize, authentication, jwt , routes)
+react native
+
+
+
+
+#####################################
+Volume I: System Architecture & Data Flow
+Layered Architecture Pattern (Separation of Concerns)
+
+Dependency Inversion (Transport Agnosticism)
+
+The Request Lifecycle:
+
+Routers: Route multiplexing and endpoint definition.
+
+Middleware: Request interception, fail-fast mechanics, and Zod validation.
+
+Controllers: HTTP transport adapters (handling req/res).
+
+Services: Pure business logic and database interactions.
+
+Serializers (DTOs): Data filtering to prevent sensitive information leakage.
+
+Volume II: Database Engineering & ORM Mechanics
+PostgreSQL Fundamentals: Tables, rows, columns, Primary Keys, and Foreign Keys.
+
+Database Infrastructure: Local development vs. Cloud (Neon, Supabase, AWS RDS).
+
+Query Optimization:
+
+The Offset Penalty (Why LIMIT/OFFSET fails at scale).
+
+Keyset/Cursor Pagination (The enterprise solution).
+
+Text Search (Op.iLike vs. Trigram Indexes).
+
+Sequelize ORM:
+
+Models, Migrations, and Seeders.
+
+Abstract Syntax Trees (ASTs) and SQL compilation.
+
+The N+1 Query Problem and Eager Loading.
+
+Associations: hasOne, hasMany, belongsTo.
+
+Data Security: UUIDs (Universally Unique Identifiers) vs. Standard Sequential IDs (preventing Enumeration/IDOR attacks).
+
+Volume III: Applied Cryptography
+Encryption vs. Hashing (Two-way vs. One-way functions).
+
+Rainbow Tables and pre-computed hash attacks.
+
+Cryptographic Salting to ensure unique hashes for identical passwords.
+
+Bcrypt: Key stretching and algorithmic cost factors to prevent GPU brute-forcing.
+
+Volume IV: The JavaScript Event Loop
+Execution Models: Synchronous (Blocking) vs. Asynchronous (Non-Blocking) execution.
+
+Node.js Architecture:
+
+The single-threaded V8 Call Stack.
+
+The libuv C++ library and the background Worker Pool.
+
+The Task Queue and the Event Loop monitoring cycle.
+
+Modern JS Standards: const vs. let, Array methods (map, filter), and ESLint for codebase uniformity.
+
+Naming Conventions: camelCase, PascalCase, and snake_case.
+
+Volume V: Identity & Access Architecture
+Stateless Authentication (JWT - JSON Web Tokens):
+
+Header, Payload (Claims), and Signature math.
+
+Base64Url Encoding vs. Encryption.
+
+The "Fatal Flaw" (inability to revoke).
+
+The Access + Refresh Token pattern to secure JWTs.
+
+Stateful Authentication (Redis Opaque Tokens):
+
+In-memory Key-Value storage for lightning-fast lookups.
+
+Instant session revocation and global lockouts.
+
+Token Storage: LocalStorage (XSS vulnerabilities) vs. HttpOnly Cookies (Enterprise standard).
+
+Authorization: RBAC (Role-Based Access Control) vs. ABAC (Attribute-Based Access Control).
+
+Volume VI: Network Protocol & API Contracts
+REST Operations: GET, POST, PUT, DELETE.
+
+Network State Mutations & Idempotency:
+
+Safe methods vs. Idempotent mutations vs. Non-Idempotent mutations.
+
+Idempotency Keys (The Stripe Pattern) for safe network retries.
+
+Exhaustive HTTP Status Codes:
+
+1xx: Informational (Protocol handshakes).
+
+2xx: Success (200 OK, 201 Created, 204 No Content).
+
+3xx: Redirection (Caching and routing).
+
+4xx: Client Errors (400 Bad Request, 401 Unauthorized, 403 Forbidden, 409 Conflict, 429 Too Many Requests).
+
+5xx: Server Errors (500 Internal Server Error, 502 Bad Gateway, 504 Gateway Timeout).
+
+
+
+#########################################################################################
+
+
+
+JWT isn't just a random string; it's a carefully crafted digital "passport." Since we've been talking about sessions and security, understanding JWT is like understanding the difference between a physical key (Session/Redis) and a digital ticket (JWT).1. The Anatomy of a TokenA JWT consists of three Base64Url-encoded parts separated by dots (.):Header: Contains metadata (Type of token and the algorithm used, e.g., HS256).Payload: The data you want to send (e.g., userId: "uuid-v4-here").Signature: The security seal that ensures the token hasn't been tampered with.2. The Generation Algorithm (How it's built)The server follows these mechanical steps to create the token:Encode the Header: Take the JSON header and encode it to Base64Url.Encode the Payload: Take the JSON claims (your user data) and encode them to Base64Url.Create the Signature: This is the core logic. The server takes the encoded header and payload, joins them with a dot, and runs them through a hashing algorithm using a Secret Key.The "logic" follows this formula:$$Signature = \text{Algorithm}(\text{base64UrlEncode}(header) + "." + \text{base64UrlEncode}(payload), \text{secret})$$Final Result: The three parts are joined: header.payload.signature.3. The Verification Algorithm (The Bouncer)When the client sends the token back, the server doesn't "decrypt" it (standard JWT is encoded, not encrypted). Instead, it re-calculates the signature to verify integrity.Deconstruct: The server splits the incoming token into Header, Payload, and Signature.Re-hash: The server takes the received Header and Payload and runs the exact same algorithm again using its own private SECRET_KEY.Compare:If Calculated Signature $==$ Received Signature, the token is authentic.If they don't match, someone changed the payload data (e.g., changing userId to try and hack another account). The server rejects it immediately.4. Common Algorithms: HS256 vs. RS256In your project, you would typically choose between these two:FeatureHS256 (Symmetric)RS256 (Asymmetric)KeysOne single "Secret Key."Private Key (to sign) + Public Key (to verify).SecurityBoth issuer and verifier must know the secret.Only issuer needs the private key; anyone can verify with the public key.ComplexitySimple and fast.More complex math (RSA).Use CaseInternal apps / Single servers.Large systems / Third-party APIs (like Google/Auth0).5. Redis vs. JWT: The "State" DebateSince we just set up Redis for your sessions, here is why you would use one over the other:Redis (Stateful): The server "remembers" the user. If you want to force-logout a user (e.g., after a password change), you just delete the key from Redis. It’s very secure but requires a database hit every time.JWT (Stateless): The server "calculates" the user. No database lookup is needed, which makes it incredibly fast for massive scale. However, revoking a JWT before it expires is much harder because the server doesn't "store" it.
+
+#################################
+button that jio tag a picture  with location 
+create a file table with file name and location table useer id  timestamp 

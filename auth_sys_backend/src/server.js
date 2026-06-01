@@ -2,8 +2,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const {Model} = require('sequelize') 
-const commentRoutes = require('./api/comments/routes'); 
-const logRoutes = require('./api/logs/routes');
+const path = require('path');
 
 require('dotenv').config({ path: '../.env' });
 
@@ -14,9 +13,12 @@ const PORT = process.env.PORT || 8000;
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: true,
+  origin: true, //channgeit to url before live
   credentials: true,
 }));
+
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Cannyminds Auth API is running' });
 });

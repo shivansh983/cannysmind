@@ -2,14 +2,12 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // 1. Add 'role' to Users (We keep this from the original file)
     await queryInterface.addColumn('Users', 'role', {
       type: Sequelize.STRING,
       allowNull: false,
       defaultValue: 'user',
     });
 
-    // 2. Add the Top-Down Jira Columns to Tasks
     await queryInterface.addColumn('Tasks', 'status', {
       type: Sequelize.STRING,
       defaultValue: 'open',
@@ -32,7 +30,6 @@ module.exports = {
       onDelete: 'SET NULL'
     });
 
-    // 3. Create the Comments Table
     await queryInterface.createTable('Comments', {
       id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
       taskId: { 
@@ -48,7 +45,6 @@ module.exports = {
       updatedAt: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') }
     });
 
-    // 4. Create the TaskLogs (Activity History) Table
     await queryInterface.createTable('TaskLogs', {
       id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
       taskId: { 
@@ -69,7 +65,6 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    // If you ever undo this migration, it deletes everything in reverse order
     await queryInterface.dropTable('TaskLogs');
     await queryInterface.dropTable('Comments');
     

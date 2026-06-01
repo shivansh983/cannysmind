@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const redis = require('../utils/redis'); // OR '../lib/redis' depending on your exact folder structure
+const redis = require('../utils/redis');
 const db = require('../database/models');
 
 const protect = async (req, res, next) => {
@@ -13,10 +13,8 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Unauthorized: Missing token or Client ID' });
     }
 
-    // 1. Grab the full token string sent by the frontend (e.g., "userId.secretToken")
     const rawToken = authHeader.split(' ')[1];
     
-    // 2. THIS IS THE FIX: Split the string and ONLY hash the secret part!
     const tokenParts = rawToken.split('.');
     const secretOnly = tokenParts.length === 2 ? tokenParts[1] : rawToken;
 

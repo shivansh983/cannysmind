@@ -38,11 +38,12 @@ async function getComments(req, res) {
     const comments = await db.Comment.findAll({
       where: { taskId },
       include: [{ model: db.User, as: 'author', attributes: ['id', 'name', 'role'] }],
-      order: [['createdAt', 'DSC']]
+      order: [['createdAt', 'ASC']]
     });
     
     return res.status(200).json({ comments });
   } catch (error) {
+    console.error('Get Comments Error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

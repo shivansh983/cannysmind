@@ -1,4 +1,9 @@
 {
-  "name": "authsysmobileapp",
-  "displayName": "authsysmobileapp"
+  "expo": {
+    "name": "authsysmobileapp",
+    "slug": "authsysmobileapp",
+    "web": {
+      "bundler": "metro"
+    }
+  }
 }

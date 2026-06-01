@@ -4,12 +4,10 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Task extends Model {
     static associate(models) {
-      // The Top-Down Hierarchy
       Task.belongsTo(models.User, { foreignKey: 'userId', as: 'creator' });
       Task.belongsTo(models.User, { foreignKey: 'managerId', as: 'manager' });
       Task.belongsTo(models.User, { foreignKey: 'assigneeId', as: 'assignee' });
 
-      // The Discussion & History
       Task.hasMany(models.Comment, { foreignKey: 'taskId', as: 'comments' });
       Task.hasMany(models.TaskLog, { foreignKey: 'taskId', as: 'logs' });
     }
@@ -29,8 +27,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    deadline: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    priority: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'medium',
+      validate: {
+        isIn: {
+          args: [['low', 'medium', 'high', 'critical']],
+          msg: 'Invalid priority',
+        },
+      },
+    },
     
-    // --- NEW JIRA STATUS ---
     status: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -61,11 +73,9 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     
-    // --- NEW JIRA ASSIGNMENTS ---
-    userId: { type: DataTypes.UUID, allowNull: false },      // Admin who created it
-    managerId: { type: DataTypes.UUID, allowNull: true },    // Manager who claimed it
-    assigneeId: { type: DataTypes.UUID, allowNull: true },   // User doing the work
-
+    userId: { type: DataTypes.UUID, allowNull: false },      
+    managerId: { type: DataTypes.UUID, allowNull: true },   
+    assigneeId: { type: DataTypes.UUID, allowNull: true },   
   }, {
     sequelize,
     modelName: 'Task',

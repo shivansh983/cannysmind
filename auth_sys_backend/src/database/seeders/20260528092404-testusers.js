@@ -1,10 +1,9 @@
 'use strict';
-const bcrypt = require('bcrypt'); // (or 'bcryptjs' if that's what you installed)
+const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    // Hash a universal password for all 4 accounts
     const passwordHash = await bcrypt.hash('password123', 10);
     const now = new Date();
 
@@ -53,7 +52,6 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    // This allows you to undo the seed easily
     await queryInterface.bulkDelete('Users', null, {});
   }
 };

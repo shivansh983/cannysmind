@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TextInputProps, TouchableOpacity,
   TouchableWithoutFeedback, StyleSheet, Alert, KeyboardAvoidingView,
   Platform, FlatList, ScrollView, Animated, StatusBar, SafeAreaView,
-  useColorScheme, ActivityIndicator, ViewStyle, Modal, RefreshControl,
+  useColorScheme, ActivityIndicator, ViewStyle, Modal, RefreshControl,Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
@@ -11,10 +11,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Svg, { Path, Circle, Rect, Line, Polyline } from 'react-native-svg';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 // ─── API ────────────
-
-const API_BASE = 'http://10.0.2.2:8000/api';
+const API_BASE = 'http://localhost:8000/api'
+//const API_BASE = 'http://10.0.2.2:8000/api';
 
 const buildHeaders = (cookie: string) => {
   const clientId = cookie.split('.')[0];
@@ -26,6 +28,20 @@ const buildHeaders = (cookie: string) => {
 };
 
 const api = {
+
+  authPostForm: async (path: string, formData: FormData, cookie: string): Promise<any> => {
+    const clientId = cookie.split('.')[0];
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cookie}`,
+        'client-id': clientId,
+      },
+      body: formData,
+    });
+    return res.json();
+  },
+
   post: async (path: string, body: object): Promise<any> => {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
@@ -95,17 +111,29 @@ const FZ = { xs: 11, sm: 12, md: 14, lg: 16, xl: 18, xxl: 22, xxxl: 28 } as cons
 
 interface UserRef { id: string; name: string; userName: string; }
 
+interface LocationRecord {
+  id: string;
+  name: string;
+  description?: string;
+  imageUrl: string;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+  uploader?: UserRef;
+}
+
 interface Task {
   id: string;
   name: string;
   description?: string;
   isActive: boolean;
   status: 'open' | 'claimed' | 'assigned' | 'in-progress' | 'completed' | 'reopened';
+  createdAt?: string;
   startedAt: string;
   completedAt?: string;
   duration?: string;
-  deadline?: string; // New field for Admin
-  priority?: string; // New field for Admin
+  deadline?: string; 
+  priority?: string; 
   creator?: UserRef;
   manager?: UserRef;
   assignee?: UserRef;
@@ -190,6 +218,8 @@ const Tab = createBottomTabNavigator();
 
 interface IP { size?: number; color: string; sw?: number; }
 const I = {
+  MapPin:   ({ size = 20, color, sw = 1.5 }: IP) => <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" /><Circle cx="12" cy="10" r="3" stroke={color} strokeWidth={sw} /></Svg>,
+  Camera:   ({ size = 18, color, sw = 1.5 }: IP) => <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" /><Circle cx="12" cy="13" r="4" stroke={color} strokeWidth={sw} /></Svg>,
   Task:     ({ size = 20, color, sw = 1.5 }: IP) => <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Polyline points="9 11 12 14 22 4" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" /><Path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" /></Svg>,
   Bar:      ({ size = 20, color, sw = 1.5 }: IP) => <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Line x1="18" y1="20" x2="18" y2="10" stroke={color} strokeWidth={sw} strokeLinecap="round" /><Line x1="12" y1="20" x2="12" y2="4" stroke={color} strokeWidth={sw} strokeLinecap="round" /><Line x1="6" y1="20" x2="6" y2="14" stroke={color} strokeWidth={sw} strokeLinecap="round" /></Svg>,
   Cog:      ({ size = 20, color, sw = 1.5 }: IP) => <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={sw} /><Path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke={color} strokeWidth={sw} /></Svg>,
@@ -282,6 +312,64 @@ function StatusPill({ status, theme }: { status: string; theme: Theme }) {
   return (
     <View style={[sh.pill, { backgroundColor: cfg.bg }]}>
       <Text style={[sh.pillText, { color: cfg.color }]}>{cfg.label}</Text>
+    </View>
+  );
+}
+
+function PriorityPill({ priority, theme }: { priority?: string | null; theme: Theme }) {
+  const normalized = (priority || 'medium').toLowerCase();
+  const cfg =
+    normalized === 'critical' ? { label: 'Critical', color: theme.danger, bg: theme.dangerBg } :
+    normalized === 'high' ? { label: 'High', color: theme.warning, bg: theme.warningBg } :
+    normalized === 'low' ? { label: 'Low', color: theme.textSecondary, bg: theme.bgTertiary } :
+    { label: 'Medium', color: theme.blue, bg: theme.blueBg };
+
+  return (
+    <View style={[sh.pill, { backgroundColor: cfg.bg }]}>
+      <Text style={[sh.pillText, { color: cfg.color }]}>{cfg.label}</Text>
+    </View>
+  );
+}
+
+function titleCase(value?: string | null) {
+  if (!value) return '';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function isOverdue(task: Pick<Task, 'deadline' | 'status'>) {
+  return !!task.deadline && task.status !== 'completed' && new Date(task.deadline).getTime() < Date.now();
+}
+
+function formatAction(action: string) {
+  return action.replace(/_/g, ' ').toLowerCase();
+}
+
+function ActivityTimeline({ logs, theme }: { logs: TaskLog[]; theme: Theme }) {
+  if (logs.length === 0) {
+    return (
+      <View style={{ backgroundColor: theme.bgTertiary, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.border }}>
+        <Text style={{ color: theme.textMuted, fontSize: FZ.sm }}>No activity yet.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ gap: 0 }}>
+      {logs.map((l, index) => (
+        <View key={l.id} style={{ flexDirection: 'row', gap: SP.sm }}>
+          <View style={{ alignItems: 'center', width: 14 }}>
+            <View style={{ width: 9, height: 9, borderRadius: RD.full, backgroundColor: theme.blue, marginTop: 5 }} />
+            {index < logs.length - 1 && <View style={{ width: 1, flex: 1, backgroundColor: theme.border, marginTop: 4 }} />}
+          </View>
+          <View style={{ flex: 1, paddingBottom: SP.md }}>
+            <Text style={{ color: theme.text, fontSize: FZ.sm, lineHeight: 19 }}>
+              <Text style={{ fontWeight: '700' }}>{l.actor.name}</Text> {formatAction(l.action)}
+            </Text>
+            {l.note ? <Text style={{ color: theme.textSecondary, fontSize: FZ.sm, lineHeight: 19, marginTop: 2 }}>{l.note}</Text> : null}
+            <Text style={{ color: theme.textMuted, fontSize: FZ.xs, marginTop: 3 }}>{new Date(l.createdAt).toLocaleString()}</Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -467,6 +555,8 @@ const au = StyleSheet.create({
 function CreateTaskModal({ visible, onClose, onCreated, theme, cookie }: { visible: boolean; onClose: () => void; onCreated: () => void; theme: Theme; cookie: string }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [priority, setPriority] = useState('medium');
   const [loading, setLoading] = useState(false);
   const [nameErr, setNameErr] = useState('');
 
@@ -474,9 +564,14 @@ function CreateTaskModal({ visible, onClose, onCreated, theme, cookie }: { visib
     if (name.trim().length < 3) { setNameErr('Task name must be at least 3 characters'); return; }
     setLoading(true);
     try {
-      const data = await api.authPost('/tasks', { name: name.trim(), description: description.trim() || undefined }, cookie);
+      const data = await api.authPost('/tasks', {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        deadline: deadline.trim() || undefined,
+        priority: priority.trim().toLowerCase() || 'medium',
+      }, cookie);
       if (data.task) {
-        setName(''); setDescription('');
+        setName(''); setDescription(''); setDeadline(''); setPriority('medium');
         onCreated(); onClose();
       } else {
         Alert.alert('Failed', data.error || data.message || 'Could not create task.');
@@ -500,6 +595,8 @@ function CreateTaskModal({ visible, onClose, onCreated, theme, cookie }: { visib
         <ScrollView contentContainerStyle={{ padding: SP.lg, gap: SP.sm }}>
           <Field label="Task Name" iconLeft={<I.Task size={16} color={theme.textMuted} />} placeholder="Min. 3 characters" value={name} onChangeText={t => { setName(t); setNameErr(''); }} error={nameErr} theme={theme} />
           <Field label="Description (optional)" iconLeft={<I.ListIcon size={16} color={theme.textMuted} />} placeholder="What needs to be done?" value={description} onChangeText={setDescription} theme={theme} />
+          <Field label="Due Date (optional)" iconLeft={<I.Clock size={16} color={theme.textMuted} />} placeholder="YYYY-MM-DD or YYYY-MM-DD HH:mm" value={deadline} onChangeText={setDeadline} theme={theme} />
+          <Field label="Priority" iconLeft={<I.Alert size={16} color={theme.textMuted} />} placeholder="low, medium, high, critical" autoCapitalize="none" value={priority} onChangeText={setPriority} theme={theme} />
           <Btn title="Create Task" onPress={submit} loading={loading} theme={theme} />
         </ScrollView>
       </SafeAreaView>
@@ -509,33 +606,189 @@ function CreateTaskModal({ visible, onClose, onCreated, theme, cookie }: { visib
 
 // ─── TASK DETAIL MODAL (UPDATED FLOW) ────────────
 
+function EditTaskModal({ visible, task, onClose, onUpdated, theme, cookie }: { visible: boolean; task: Task | null; onClose: () => void; onUpdated: () => void; theme: Theme; cookie: string }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [loading, setLoading] = useState(false);
+  const [nameErr, setNameErr] = useState('');
+
+  useEffect(() => {
+    if (!task) return;
+    setName(task.name || '');
+    setDescription(task.description || '');
+    setDeadline(task.deadline ? task.deadline.slice(0, 16).replace('T', ' ') : '');
+    setPriority((task.priority || 'medium').toLowerCase());
+    setNameErr('');
+  }, [task, visible]);
+
+  const submit = async () => {
+    if (!task) return;
+    if (name.trim().length < 3) { setNameErr('Task name must be at least 3 characters'); return; }
+    setLoading(true);
+    try {
+      const data = await api.authPatch(`/tasks/${task.id}`, {
+        name: name.trim(),
+        description: description.trim(),
+        deadline: deadline.trim() || null,
+        priority: priority.trim().toLowerCase() || 'medium',
+      }, cookie);
+
+      if (data.task || data.message) {
+        onUpdated();
+        onClose();
+      } else {
+        Alert.alert('Failed', data.error || data.message || 'Could not update task.');
+      }
+    } catch {
+      Alert.alert('Error', 'Connection error.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <View style={[sh.pageHeader, { borderBottomColor: theme.border }]}>
+          <Text style={[sh.pageTitle, { color: theme.text }]}>Edit Task</Text>
+          <TouchableOpacity onPress={onClose} style={[sh.iconBtn, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
+            <I.X size={16} color={theme.text} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: SP.lg, gap: SP.sm }}>
+          <Field label="Task Name" iconLeft={<I.Task size={16} color={theme.textMuted} />} value={name} onChangeText={t => { setName(t); setNameErr(''); }} error={nameErr} theme={theme} />
+          <Field label="Description" iconLeft={<I.ListIcon size={16} color={theme.textMuted} />} value={description} onChangeText={setDescription} theme={theme} />
+          <Field label="Due Date (optional)" iconLeft={<I.Clock size={16} color={theme.textMuted} />} placeholder="YYYY-MM-DD or YYYY-MM-DD HH:mm" value={deadline} onChangeText={setDeadline} theme={theme} />
+          <Field label="Priority" iconLeft={<I.Alert size={16} color={theme.textMuted} />} placeholder="low, medium, high, critical" autoCapitalize="none" value={priority} onChangeText={setPriority} theme={theme} />
+          <Btn title="Save Changes" onPress={submit} loading={loading} theme={theme} variant="blue" />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function AssigneePickerModal({ visible, onClose, onSelect, theme, cookie, loading }: { visible: boolean; onClose: () => void; onSelect: (user: UserRef) => void; theme: Theme; cookie: string; loading?: boolean }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<UserRef[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setQuery('');
+    setResults([]);
+    setSearching(false);
+  }, [visible]);
+
+  const searchUsers = async (text: string) => {
+    setQuery(text);
+    const q = text.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const data = await api.authGet(`/users/search?q=${encodeURIComponent(q)}`, cookie);
+      setResults(data.users || []);
+    } catch {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <View style={[sh.pageHeader, { borderBottomColor: theme.border }]}>
+          <View>
+            <Text style={[sh.pageTitle, { color: theme.text }]}>Assign Task</Text>
+            <Text style={{ color: theme.textMuted, fontSize: FZ.xs, marginTop: 2 }}>Search by name or username</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={[sh.iconBtn, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
+            <I.X size={16} color={theme.text} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ padding: SP.lg, gap: SP.md, flex: 1 }}>
+          <TextInput
+            style={{ height: 46, borderWidth: 1, borderColor: theme.border, borderRadius: RD.md, paddingHorizontal: SP.md, color: theme.text, backgroundColor: theme.inputBg }}
+            placeholder="Start typing a name..."
+            placeholderTextColor={theme.textMuted}
+            autoCapitalize="none"
+            value={query}
+            onChangeText={searchUsers}
+          />
+
+          {searching && <ActivityIndicator color={theme.text} />}
+
+          {!searching && query.trim().length > 0 && results.length === 0 && (
+            <View style={{ backgroundColor: theme.bgTertiary, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.border }}>
+              <Text style={{ color: theme.textMuted, fontSize: FZ.sm }}>No matching users found.</Text>
+            </View>
+          )}
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: SP.sm, paddingBottom: SP.xl }}>
+            {results.map(user => (
+              <TouchableOpacity
+                key={user.id}
+                disabled={loading}
+                activeOpacity={0.8}
+                onPress={() => onSelect(user)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.md, backgroundColor: theme.card, borderRadius: RD.md, borderWidth: 1, borderColor: theme.cardBorder }}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: RD.full, backgroundColor: theme.bgTertiary, borderWidth: 1, borderColor: theme.border, justifyContent: 'center', alignItems: 'center' }}>
+                  <I.Person size={16} color={theme.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontSize: FZ.md, fontWeight: '700' }}>{user.name}</Text>
+                  <Text style={{ color: theme.textMuted, fontSize: FZ.xs }}>@{user.userName}</Text>
+                </View>
+                {loading ? <ActivityIndicator color={theme.text} size="small" /> : <I.Chevron size={14} color={theme.textMuted} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 function TaskDetailModal({ task, visible, onClose, onRefresh, theme, cookie, role }: { task: Task | null; visible: boolean; onClose: () => void; onRefresh: () => void; theme: Theme; cookie: string; role: string | null }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [logs, setLogs] = useState<TaskLog[]>([]);
   const [newComment, setNewComment] = useState('');
   
-  // States for Manager Search
-  const [search, setSearch] = useState('');
-  const [results, setResults] = useState<UserRef[]>([]);
-  
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+  const [showReopenForm, setShowReopenForm] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
 
   useEffect(() => {
     if (visible && task) {
       api.authGet(`/comments/${task.id}`, cookie).then(d => setComments(d.comments || []));
       api.authGet(`/logs/task/${task.id}`, cookie).then(d => setLogs(d.logs || []));
-      setSearch('');
-      setResults([]);
+      setIsEditing(false);
+      setShowAssigneePicker(false);
+      setShowReopenForm(false);
+      setReopenReason('');
     }
   }, [visible, task]);
 
   if (!task) return null;
 
+  const latestReopenReason = logs.find(l => l.action === 'TASK_REOPENED' && l.note)?.note;
+  const canStartTask = role === 'user' && ['assigned', 'reopened'].includes(task.status);
+  const taskOverdue = isOverdue(task);
+
   const handleAction = async (action: string, body: any = {}) => {
     setLoading(true);
     try {
-      // Switch logic if the action is purely a 'delete' via a dedicated DELETE endpoint,
-      // but assuming for now it's managed via PATCH or a DELETE route.
+      
       const method = action === 'delete' ? 'DELETE' : 'PATCH';
       const url = `/tasks/${task.id}${action === 'delete' ? '' : '/' + action}`;
       
@@ -576,19 +829,26 @@ function TaskDetailModal({ task, visible, onClose, onRefresh, theme, cookie, rol
         </View>
         
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: SP.lg, gap: SP.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Text style={{ fontSize: FZ.xl, fontWeight: '700', color: theme.text, flex: 1, marginRight: SP.md }}>{task.name}</Text>
-            <StatusPill status={task.status} theme={theme} />
+          <View style={{ gap: SP.sm }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.xs }}>
+              <StatusPill status={task.status} theme={theme} />
+              <PriorityPill priority={task.priority} theme={theme} />
+              {taskOverdue && (
+                <View style={[sh.pill, { backgroundColor: theme.dangerBg }]}>
+                  <Text style={[sh.pillText, { color: theme.danger }]}>Overdue</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ fontSize: FZ.xxl, fontWeight: '700', color: theme.text, lineHeight: 28 }}>{task.name}</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.md, lineHeight: 22 }}>{task.description || 'No description provided.'}</Text>
           </View>
-          <Text style={{ color: theme.textSecondary, fontSize: FZ.md, lineHeight: 22 }}>{task.description || 'No description provided.'}</Text>
-          
-          <View style={{ backgroundColor: theme.bgTertiary, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.border }}>
-            <Text style={{ color: theme.text, fontSize: FZ.sm, marginBottom: 4 }}>Created by: <Text style={{fontWeight: '600'}}>{task.creator?.name || 'Unknown'}</Text></Text>
-            <Text style={{ color: theme.text, fontSize: FZ.sm, marginBottom: 4 }}>Manager: <Text style={{fontWeight: '600'}}>{task.manager?.name || 'Unclaimed'}</Text></Text>
-            <Text style={{ color: theme.text, fontSize: FZ.sm, marginBottom: 4 }}>Assignee: <Text style={{fontWeight: '600'}}>{task.assignee?.name || 'Unassigned'}</Text></Text>
-            {task.deadline && <Text style={{ color: theme.text, fontSize: FZ.sm, marginBottom: 4 }}>Deadline: <Text style={{fontWeight: '600'}}>{new Date(task.deadline).toLocaleDateString()}</Text></Text>}
-            {task.priority && <Text style={{ color: theme.text, fontSize: FZ.sm }}>Priority: <Text style={{fontWeight: '600'}}>{task.priority}</Text></Text>}
-          </View>
+
+          {task.status === 'reopened' && latestReopenReason && (
+            <View style={{ backgroundColor: theme.dangerBg, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.danger + '55' }}>
+              <Text style={{ color: theme.danger, fontWeight: '700', fontSize: FZ.sm, marginBottom: 4 }}>Reopen Reason</Text>
+              <Text style={{ color: theme.text, fontSize: FZ.md, lineHeight: 21 }}>{latestReopenReason}</Text>
+            </View>
+          )}
 
           {/* ROLE BASED ACTIONS */}
           <View style={{ gap: SP.sm, marginVertical: SP.xs }}>
@@ -599,45 +859,13 @@ function TaskDetailModal({ task, visible, onClose, onRefresh, theme, cookie, rol
             {/* MANAGER SEARCH ASSIGNMENT (UPDATED) */}
             {role === 'manager' && task.status === 'claimed' && (
               <View style={{ gap: SP.sm }}>
-                <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Assign Task To:</Text>
-                <TextInput 
-                  style={{ height: 44, borderWidth: 1, borderColor: theme.border, borderRadius: RD.md, paddingHorizontal: SP.md, color: theme.text, backgroundColor: theme.inputBg }} 
-                  placeholder="Search user by name..." 
-                  placeholderTextColor={theme.textMuted} 
-                  value={search} 
-                  onChangeText={async (t) => {
-                    setSearch(t);
-                    if (t.length > 2) {
-                      try {
-                        const data = await api.authGet(`/users/search?q=${t}`, cookie);
-                        setResults(data.users || []);
-                      } catch (e) {
-                        console.log("Search error", e);
-                      }
-                    } else {
-                      setResults([]);
-                    }
-                  }} 
-                />
-                
-                {results.map(u => (
-                  <TouchableOpacity 
-                    key={u.id} 
-                    style={{ padding: SP.md, backgroundColor: theme.bgTertiary, borderRadius: RD.md, marginBottom: 4 }}
-                    onPress={() => {
-                      handleAction('assign', { assigneeId: u.id });
-                      setSearch('');
-                      setResults([]);
-                    }}
-                  >
-                    <Text style={{ color: theme.text, fontWeight: '600' }}>{u.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>No assignee yet.</Text>
+                <Btn title="Choose Assignee" onPress={() => setShowAssigneePicker(true)} loading={loading} theme={theme} variant="blue" />
               </View>
             )}
 
-            {role === 'user' && task.status === 'assigned' && (
-              <Btn title="Start Working" onPress={() => handleAction('status', { status: 'in-progress' })} loading={loading} theme={theme} variant="blue" />
+            {canStartTask && (
+              <Btn title={task.status === 'reopened' ? 'Restart Work' : 'Start Working'} onPress={() => handleAction('status', { status: 'in-progress' })} loading={loading} theme={theme} variant="blue" />
             )}
 
             {role === 'user' && task.status === 'in-progress' && (
@@ -645,54 +873,104 @@ function TaskDetailModal({ task, visible, onClose, onRefresh, theme, cookie, rol
             )}
 
             {(role === 'manager' || role === 'admin') && task.status === 'completed' && (
-              <Btn title="Reopen Task" onPress={() => {
-                if(!newComment) return Alert.alert('Required', 'Type a reason in the comments box below first.');
-                handleAction('reopen', { comment: newComment });
-              }} loading={loading} theme={theme} variant="danger" />
+              <View style={{ gap: SP.sm }}>
+                {!showReopenForm ? (
+                  <Btn title="Reopen Task" onPress={() => setShowReopenForm(true)} loading={loading} theme={theme} variant="danger" />
+                ) : (
+                  <View style={{ backgroundColor: theme.dangerBg, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.danger + '55', gap: SP.sm }}>
+                    <Text style={{ color: theme.danger, fontWeight: '700', fontSize: FZ.sm }}>Reopen Reason</Text>
+                    <TextInput
+                      style={{ minHeight: 88, borderWidth: 1, borderColor: theme.danger + '55', borderRadius: RD.md, paddingHorizontal: SP.md, paddingVertical: SP.sm, color: theme.text, backgroundColor: theme.card, textAlignVertical: 'top' }}
+                      placeholder="Tell the assignee what needs to change..."
+                      placeholderTextColor={theme.textMuted}
+                      multiline
+                      value={reopenReason}
+                      onChangeText={setReopenReason}
+                    />
+                    <View style={{ flexDirection: 'row', gap: SP.sm }}>
+                      <Btn title="Cancel" onPress={() => { setShowReopenForm(false); setReopenReason(''); }} theme={theme} variant="outline" style={{ flex: 1 }} />
+                      <Btn title="Submit Reopen" onPress={() => {
+                        if (!reopenReason.trim()) return Alert.alert('Required', 'Add a reopen reason first.');
+                        handleAction('reopen', { comment: reopenReason.trim() });
+                      }} loading={loading} theme={theme} variant="danger" style={{ flex: 1 }} />
+                    </View>
+                  </View>
+                )}
+              </View>
             )}
 
             {/* ADMIN ACTIONS (UPDATED) */}
             {role === 'admin' && (
               <View style={{ marginTop: SP.md, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: SP.md }}>
                 <Text style={{ color: theme.text, fontWeight: '700', fontSize: FZ.md, marginBottom: SP.sm }}>Admin Actions</Text>
-                <Btn title="Delete Task" onPress={() => {
-                  Alert.alert("Confirm Delete", "Are you sure you want to permanently delete this task?", [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Delete", style: "destructive", onPress: () => handleAction('delete') }
-                  ]);
-                }} loading={loading} theme={theme} variant="danger" />
+                <View style={{ flexDirection: 'row', gap: SP.sm }}>
+                  <Btn title="Edit Task" onPress={() => setIsEditing(true)} theme={theme} variant="blue" style={{ flex: 1 }} />
+                  <Btn title="Delete Task" onPress={() => {
+                    Alert.alert("Confirm Delete", "Are you sure you want to permanently delete this task?", [
+                      { text: "Cancel", style: "cancel" },
+                      { text: "Delete", style: "destructive", onPress: () => handleAction('delete') }
+                    ]);
+                  }} loading={loading} theme={theme} variant="danger" style={{ flex: 1 }} />
+                </View>
               </View>
             )}
           </View>
 
           {/* COMMENTS */}
           <Text style={{ fontSize: FZ.lg, fontWeight: '700', color: theme.text, marginTop: SP.sm }}>Discussion</Text>
+          {comments.length === 0 && (
+            <View style={{ backgroundColor: theme.bgTertiary, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.border }}>
+              <Text style={{ color: theme.textMuted, fontSize: FZ.sm }}>No comments yet.</Text>
+            </View>
+          )}
           {comments.map(c => (
-            <View key={c.id} style={{ backgroundColor: theme.card, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.cardBorder }}>
-              <Text style={{ color: theme.textMuted, fontSize: FZ.xs, marginBottom: 4, textTransform: 'capitalize' }}>{c.author.name} ({c.author.role})</Text>
-              <Text style={{ color: theme.text }}>{c.content}</Text>
+            <View key={c.id} style={{ backgroundColor: theme.card, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.cardBorder, gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.sm }}>
+                <Text style={{ color: theme.text, fontSize: FZ.sm, fontWeight: '700', textTransform: 'capitalize', flex: 1 }}>{c.author.name} <Text style={{ color: theme.textMuted, fontWeight: '500' }}>({c.author.role})</Text></Text>
+                <Text style={{ color: theme.textMuted, fontSize: FZ.xs }}>{new Date(c.createdAt).toLocaleString()}</Text>
+              </View>
+              <Text style={{ color: theme.textSecondary, fontSize: FZ.md, lineHeight: 21 }}>{c.content}</Text>
             </View>
           ))}
-          <View style={{ flexDirection: 'row', gap: SP.sm }}>
-            <TextInput style={{ flex: 1, height: 44, borderWidth: 1, borderColor: theme.border, borderRadius: RD.md, paddingHorizontal: SP.md, color: theme.text }} placeholder="Add a comment..." placeholderTextColor={theme.textMuted} value={newComment} onChangeText={setNewComment} />
+          <View style={{ flexDirection: 'row', gap: SP.sm, alignItems: 'flex-end' }}>
+            <TextInput style={{ flex: 1, minHeight: 46, maxHeight: 110, borderWidth: 1, borderColor: theme.border, borderRadius: RD.md, paddingHorizontal: SP.md, paddingVertical: SP.sm, color: theme.text, backgroundColor: theme.inputBg, textAlignVertical: 'top' }} placeholder="Add a comment..." placeholderTextColor={theme.textMuted} value={newComment} onChangeText={setNewComment} multiline />
             <Btn title="Post" onPress={addComment} theme={theme} style={{ paddingHorizontal: SP.lg }} />
+          </View>
+
+          <Text style={{ fontSize: FZ.lg, fontWeight: '700', color: theme.text, marginTop: SP.lg }}>Details</Text>
+          <View style={{ backgroundColor: theme.bgTertiary, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.border, gap: 6 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Created: <Text style={{ color: theme.text, fontWeight: '600' }}>{new Date(task.createdAt || task.startedAt).toLocaleString()}</Text></Text>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Due: <Text style={{ color: taskOverdue ? theme.danger : theme.text, fontWeight: '600' }}>{task.deadline ? `${new Date(task.deadline).toLocaleString()}${taskOverdue ? ' - overdue' : ''}` : 'No deadline'}</Text></Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
+              <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Priority:</Text>
+              <PriorityPill priority={task.priority} theme={theme} />
+            </View>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Creator: <Text style={{ color: theme.text, fontWeight: '600' }}>{task.creator?.name || 'Unknown'}</Text></Text>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Manager: <Text style={{ color: theme.text, fontWeight: '600' }}>{task.manager?.name || 'Unclaimed'}</Text></Text>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>Assignee: <Text style={{ color: theme.text, fontWeight: '600' }}>{task.assignee?.name || 'Unassigned'}</Text></Text>
           </View>
 
           {/* LOGS */}
           <Text style={{ fontSize: FZ.lg, fontWeight: '700', color: theme.text, marginTop: SP.lg }}>Activity Log</Text>
-          {logs.map(l => (
-            <View key={l.id} style={{ paddingVertical: SP.sm, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <Text style={{ color: theme.text, fontSize: FZ.sm }}>
-                <Text style={{fontWeight: '600'}}>{l.actor.name}</Text> {l.action.replace('_', ' ').toLowerCase()}
-              </Text>
-              <Text style={{ color: theme.textMuted, fontSize: FZ.xs, marginTop: 4 }}>{new Date(l.createdAt).toLocaleString()}</Text>
-            </View>
-          ))}
+          <ActivityTimeline logs={logs} theme={theme} />
         </ScrollView>
       </SafeAreaView>
+      <EditTaskModal visible={isEditing} task={task} onClose={() => setIsEditing(false)} onUpdated={() => { onRefresh(); setIsEditing(false); onClose(); }} theme={theme} cookie={cookie} />
+      <AssigneePickerModal
+        visible={showAssigneePicker}
+        onClose={() => setShowAssigneePicker(false)}
+        onSelect={(user) => {
+          setShowAssigneePicker(false);
+          handleAction('assign', { assigneeId: user.id });
+        }}
+        theme={theme}
+        cookie={cookie}
+        loading={loading}
+      />
     </Modal>
   );
 }
+
 
 // ─── TASKS SCREEN (UPDATED GRID LAYOUT) ────────────
 
@@ -725,59 +1003,59 @@ function TasksScreen() {
     }
   };
 
-  const FILTERS = ['All', 'Open', 'In Progress', 'Completed'];
+  const FILTERS = ['All', 'Open', 'Assigned', 'Reopened', 'In Progress', 'Completed'];
 
   const filtered = tasks.filter(t => {
     if (filter === 'All') return true;
-    if (filter === 'Open') return t.status === 'open';
+    if (filter === 'Open') return ['open', 'claimed', 'assigned', 'reopened'].includes(t.status);
+    if (filter === 'Assigned') return t.status === 'assigned';
+    if (filter === 'Reopened') return t.status === 'reopened';
     if (filter === 'In Progress') return t.status === 'in-progress';
     if (filter === 'Completed') return t.status === 'completed';
     return true;
   });
 
   const renderItem = ({ item }: { item: Task }) => {
+    const overdue = isOverdue(item);
+
     return (
       <TouchableOpacity 
         activeOpacity={0.7} 
         onPress={() => setSelectedTask(item)} 
-        // UPDATED: Fixed width logic to prevent grid view squishing/overlapping
         style={[tk.card, { 
-          backgroundColor: theme.card, 
-          borderColor: theme.cardBorder,
+          backgroundColor: overdue ? theme.dangerBg : theme.card,
+          borderColor: overdue ? theme.danger : theme.cardBorder,
           width: grid ? '48%' : '100%',
           marginBottom: grid ? 0 : SP.sm 
         }]}
       >
         <View style={[tk.strip, {
           backgroundColor:
+            overdue ? theme.danger :
             item.status === 'open' ? theme.warning :
             item.status === 'completed' ? theme.success : 
             item.status === 'reopened' ? theme.danger : theme.blue,
         }]} />
 
-        <View style={{ flex: 1 }}>
-          <Text style={[tk.name, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-
-          {item.description ? <Text style={[tk.desc, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text> : null}
-
-          <View style={tk.meta}>
-            <Text style={[tk.id, { color: theme.textMuted }]}>#{item.id}</Text>
+        <View style={{ flex: 1, gap: 6 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SP.sm }}>
+            <Text style={[tk.name, { color: theme.text, flex: 1 }]} numberOfLines={2}>{item.name}</Text>
             <StatusPill status={item.status} theme={theme} />
           </View>
 
+          <Text style={[tk.desc, { color: theme.textSecondary }]} numberOfLines={2}>{item.description || 'No description provided.'}</Text>
+
           <View style={tk.footer}>
-            {item.assignee && (
-              <View style={tk.memberRow}>
-                <I.Person size={12} color={theme.textMuted} />
-                <Text style={[tk.meta2, { color: theme.textMuted }]} numberOfLines={1}>{item.assignee.name}</Text>
-              </View>
-            )}
-            {!item.assignee && item.manager && (
-              <View style={tk.memberRow}>
-                <I.Users size={12} color={theme.textMuted} />
-                <Text style={[tk.meta2, { color: theme.textMuted }]} numberOfLines={1}>Mgr: {item.manager.name}</Text>
-              </View>
-            )}
+            <Text style={[tk.id, { color: theme.textMuted }]}>#{item.id}</Text>
+            <PriorityPill priority={item.priority} theme={theme} />
+            <Text style={[tk.meta2, { color: overdue ? theme.danger : item.deadline ? theme.warning : theme.textMuted, fontWeight: overdue ? '700' : '400' }]}>{item.deadline ? `${overdue ? 'Overdue' : 'Due'} ${new Date(item.deadline).toLocaleDateString()}` : 'No due date'}</Text>
+          </View>
+
+          <View style={tk.memberRow}>
+            {item.assignee ? <I.Person size={12} color={theme.textMuted} /> : <I.Users size={12} color={theme.textMuted} />}
+            <Text style={[tk.meta2, { color: theme.textMuted, flex: 1 }]} numberOfLines={1}>
+              {item.assignee ? `Assigned to ${item.assignee.name}` : item.manager ? `Manager: ${item.manager.name}` : 'Unclaimed'}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -907,7 +1185,6 @@ function AnalyticsScreen() {
       <PageHeader title="Analytics" theme={theme} sub="Live data from your tasks" right={<I.Trend size={18} color={theme.textSecondary} />} />
       <ScrollView contentContainerStyle={{ padding: SP.lg, gap: SP.md }} showsVerticalScrollIndicator={false}>
 
-        {/* Stat cards grid */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm }}>
           {statCards.map(c => (
             <View key={c.label} style={[an.card, { backgroundColor: theme.card, borderColor: theme.cardBorder, width: '47.5%' }]}>
@@ -1027,6 +1304,211 @@ const se = StyleSheet.create({
   rowSub:       { fontSize: FZ.sm },
 });
 
+// ─── LOCATIONS FEATURE ────────────────────
+
+function CreateLocationModal({ visible, onClose, onCreated, theme, cookie }: { visible: boolean; onClose: () => void; onCreated: () => void; theme: Theme; cookie: string }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const getPermissions = async () => {
+    const camStatus = await ImagePicker.requestCameraPermissionsAsync();
+    const locStatus = await Location.requestForegroundPermissionsAsync();
+    if (camStatus.status !== 'granted' || locStatus.status !== 'granted') {
+      Alert.alert('Permission Denied', 'Camera and Location permissions are required.');
+      return false;
+    }
+    return true;
+  };
+
+  const takePhoto = async () => {
+    if (!(await getPermissions())) return;
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+      setLoading(true);
+      try {
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setCoords({ lat: location.coords.latitude, lng: location.coords.longitude });
+      } catch (err) { Alert.alert('Location Error', 'Could not fetch GPS.'); } finally { setLoading(false); }
+    }
+  };
+
+  const pickFromGallery = async () => {
+    if (!(await getPermissions())) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.8 });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+      setLoading(true);
+      try {
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setCoords({ lat: location.coords.latitude, lng: location.coords.longitude });
+      } catch (err) { Alert.alert('Location Error', 'Could not fetch GPS.'); } finally { setLoading(false); }
+    }
+  };
+
+  const submit = async () => {
+    if (!name.trim() || !imageUri || !coords) return Alert.alert('Required', 'Name, Photo, and GPS are required.');
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', name.trim());
+      formData.append('description', description.trim());
+      formData.append('latitude', String(coords.lat));
+      formData.append('longitude', String(coords.lng));
+
+    if (Platform.OS === 'web') {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      (formData as any).append('image', blob, 'photo.jpg');  
+      } 
+      else {
+      const filename = imageUri.split('/').pop() || 'photo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      formData.append('image', { uri: imageUri, name: filename, type } as any);
+    }
+
+      const data = await api.authPostForm('/location', formData, cookie);
+      if (data.location) { setName(''); setDescription(''); setImageUri(null); setCoords(null); onCreated(); onClose(); }
+      else { Alert.alert('Failed', data.error || 'Could not save location.'); }
+    } catch (e) { Alert.alert('Error', 'Connection failed.'); } finally { setLoading(false); }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <PageHeader title="New Site Visit" theme={theme} right={<TouchableOpacity onPress={onClose} style={[sh.iconBtn, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}><I.X size={16} color={theme.text} /></TouchableOpacity>} />
+        <ScrollView contentContainerStyle={{ padding: SP.lg, gap: SP.md }}>
+          <View style={{ width: '100%', height: 200, backgroundColor: theme.bgTertiary, borderRadius: RD.lg, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+            {imageUri ? <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%' }} /> : <I.Camera size={40} color={theme.textMuted} />}
+          </View>
+          <View style={{ flexDirection: 'row', gap: SP.sm }}>
+            <Btn title="Camera" onPress={takePhoto} theme={theme} variant="blue" style={{ flex: 1 }} />
+            <Btn title="Gallery" onPress={pickFromGallery} theme={theme} variant="outline" style={{ flex: 1 }} />
+          </View>
+          <Field label="Location Name" placeholder="e.g., Warehouse A" iconLeft={<I.MapPin size={16} color={theme.textMuted} />} value={name} onChangeText={setName} theme={theme} />
+          <Field label="Description" placeholder="Notes..." iconLeft={<I.ListIcon size={16} color={theme.textMuted} />} value={description} onChangeText={setDescription} theme={theme} />
+          
+          <View style={{ backgroundColor: theme.card, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.cardBorder, flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
+            <I.MapPin size={24} color={coords ? theme.success : theme.textMuted} />
+            <View>
+              <Text style={{ color: theme.text, fontWeight: '600' }}>GPS Geotag</Text>
+              <Text style={{ color: theme.textSecondary, fontSize: FZ.sm }}>{coords ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}` : 'Waiting for photo...'}</Text>
+            </View>
+          </View>
+          <Btn title="Upload Record" onPress={submit} loading={loading} disabled={!imageUri || !coords} theme={theme} style={{ marginTop: SP.lg }} />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function LocationDetailModal({ loc, visible, onClose, theme }: { loc: LocationRecord | null, visible: boolean, onClose: () => void, theme: Theme }) {
+  const [address, setAddress] = useState('Loading address...');
+
+  useEffect(() => {
+    if (loc) {
+      Location.reverseGeocodeAsync({ latitude: loc.latitude, longitude: loc.longitude })
+        .then(res => {
+          if (res && res.length > 0) {
+            const { street, city, region, country } = res[0];
+            setAddress([street, city, region, country].filter(Boolean).join(', '));
+          } else {
+            setAddress('Address not found');
+          }
+        })
+        .catch(() => setAddress('Could not load address'));
+    }
+  }, [loc]);
+
+  if (!loc) return null;
+  const serverUrl = API_BASE.replace('/api', ''); 
+  
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, backgroundColor: theme.bg, padding: 8, borderRadius: RD.full, borderWidth: 1, borderColor: theme.border }} onPress={onClose}><I.X size={20} color={theme.text} /></TouchableOpacity>
+        <ScrollView style={{ flex: 1 }} bounces={false}>
+          <Image source={{ uri: `${serverUrl}${loc.imageUrl}` }} style={{ width: '100%', height: 350, backgroundColor: theme.bgTertiary }} resizeMode="cover" />
+          <View style={{ padding: SP.lg, gap: SP.sm }}>
+            <Text style={{ fontSize: FZ.xxl, fontWeight: '700', color: theme.text }}>{loc.name}</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: FZ.md, lineHeight: 22 }}>{loc.description || 'No description provided.'}</Text>
+            <View style={{ marginTop: SP.md, gap: SP.sm }}>
+              <Text style={{ color: theme.text, fontSize: FZ.md }}>Uploaded by: <Text style={{ fontWeight: '600' }}>{loc.uploader?.name || 'Unknown'}</Text></Text>
+              <Text style={{ color: theme.text, fontSize: FZ.md }}>{new Date(loc.createdAt).toLocaleString()}</Text>
+              
+              <View style={{ backgroundColor: theme.bgTertiary, padding: SP.md, borderRadius: RD.md, borderWidth: 1, borderColor: theme.border, marginTop: SP.xs }}>
+                <Text style={{ color: theme.text, fontSize: FZ.md, fontWeight: '600', marginBottom: 2 }}>{address}</Text>
+                <Text style={{ color: theme.textMuted, fontSize: FZ.xs }}>{loc.latitude}, {loc.longitude}</Text>
+              </View>
+
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function LocationsScreen() {
+  const scheme = useColorScheme();
+  const theme = scheme === 'dark' ? DARK : LIGHT;
+  const { cookie } = useAuth();
+  const [locations, setLocations] = useState<LocationRecord[]>([]);
+  const [fetching, setFetching] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedLoc, setSelectedLoc] = useState<LocationRecord | null>(null);
+  const serverUrl = API_BASE.replace('/api', '');
+
+  const load = async () => {
+      setFetching(true);
+      try { 
+        const data = await api.authGet('/location', cookie ?? ''); 
+        setLocations(Array.isArray(data) ? data : (data.locations || []));
+      } 
+      catch (e) { 
+        console.error(e); 
+      } 
+      finally { 
+        setFetching(false); 
+      }
+    };
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+      <PageHeader title="Field Locations" theme={theme} />
+      {fetching ? <ActivityIndicator style={{ marginTop: SP.xxl }} color={theme.text} /> : (
+        <FlatList
+          data={locations}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: SP.lg, gap: SP.md }}
+          renderItem={({ item }) => (
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setSelectedLoc(item)} style={{ flexDirection: 'row', backgroundColor: theme.card, borderRadius: RD.lg, borderWidth: 1, borderColor: theme.cardBorder, overflow: 'hidden' }}>
+              <Image source={{ uri: `${serverUrl}${item.imageUrl}` }} style={{ width: 100, height: '100%', backgroundColor: theme.bgTertiary }} />
+              <View style={{ flex: 1, padding: SP.md, justifyContent: 'center' }}>
+                <Text style={{ color: theme.text, fontSize: FZ.md, fontWeight: '700' }} numberOfLines={1}>{item.name}</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: FZ.sm, marginTop: 4 }} numberOfLines={2}>{item.description}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+      <TouchableOpacity onPress={() => setShowCreate(true)} style={{ position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: RD.full, backgroundColor: theme.accent, justifyContent: 'center', alignItems: 'center' }}>
+        <I.Plus size={24} color={theme.accentText} />
+      </TouchableOpacity>
+      <CreateLocationModal visible={showCreate} onClose={() => setShowCreate(false)} onCreated={load} theme={theme} cookie={cookie ?? ''} />
+      <LocationDetailModal loc={selectedLoc} visible={!!selectedLoc} onClose={() => setSelectedLoc(null)} theme={theme} />
+    </SafeAreaView>
+  );
+}
+
+
+
 // ─── PROFILE SCREEN ─────────────────────
 
 function ProfileScreen() {
@@ -1064,7 +1546,6 @@ function ProfileScreen() {
       <PageHeader title="Profile" theme={theme} />
       <ScrollView contentContainerStyle={{ padding: SP.lg, gap: SP.md }} showsVerticalScrollIndicator={false}>
 
-        {/* Avatar card */}
         <View style={[pr.hero, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           <View style={[pr.avatar, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
             <I.Person size={28} color={theme.textSecondary} />
@@ -1073,7 +1554,6 @@ function ProfileScreen() {
           <Text style={{ color: theme.textMuted, fontSize: FZ.sm }}>System Access Level</Text>
         </View>
 
-        {/* Task stats */}
         <View style={[pr.statsRow, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           {statItems.map((s, i) => (
             <React.Fragment key={s.label}>
@@ -1086,7 +1566,6 @@ function ProfileScreen() {
           ))}
         </View>
 
-        {/* Info rows */}
         <View style={[se.group, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           {infoRows.map((r, i) => (
             <View key={r.label} style={[se.row, i < infoRows.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
@@ -1120,6 +1599,9 @@ const pr = StyleSheet.create({
   logoutText: { fontSize: FZ.md, fontWeight: '600' },
 });
 
+
+
+
 // ─── BOTTOM TABS ─────────────────────────────────────
 
 function AppTabs() {
@@ -1127,7 +1609,7 @@ function AppTabs() {
   const theme = scheme === 'dark' ? DARK : LIGHT;
   const { role } = useAuth();
 
-  return (
+  return (    
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -1137,20 +1619,23 @@ function AppTabs() {
         tabBarLabelStyle: { fontSize: FZ.xs, fontWeight: '500', marginTop: 2 },
         tabBarIcon: ({ color, focused }) => {
           const sw = focused ? 2 : 1.5;
-          if (route.name === 'Tasks')     return <I.Task   size={20} color={color} sw={sw} />;
-          if (route.name === 'Analytics') return <I.Bar    size={20} color={color} sw={sw} />;
-          if (route.name === 'Settings')  return <I.Cog    size={20} color={color} sw={sw} />;
-          if (route.name === 'Profile')   return <I.Person size={20} color={color} sw={sw} />;
+          if (route.name === 'Tasks')     return <I.Task     size={20} color={color} sw={sw} />;
+          if (route.name === 'Locations') return <I.MapPin   size={20} color={color} sw={sw} />;
+          if (route.name === 'Analytics') return <I.Bar      size={20} color={color} sw={sw} />;
+          if (route.name === 'Settings')  return <I.Cog      size={20} color={color} sw={sw} />;
+          if (route.name === 'Profile')   return <I.Person   size={20} color={color} sw={sw} />;
         },
       })}
     >
-      <Tab.Screen name="Tasks"     component={TasksScreen}     />
-      {/* Hide Analytics from Standard Users */}
-      {(role === 'admin' || role === 'manager') && (
+      <Tab.Screen name="Tasks" component={TasksScreen} />
+      <Tab.Screen name="Locations" component={LocationsScreen} />
+      
+      {(role === 'admin' || role === 'manager') ? (
         <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-      )}
-      <Tab.Screen name="Settings"  component={SettingsScreen}  />
-      <Tab.Screen name="Profile"   component={ProfileScreen}   />
+      ) : null}
+      
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -1179,9 +1664,11 @@ function Root() {
       }
     </NavigationContainer>
   );
+
 }
 
 // ─── APP 
-export default function App() {
+export default function App() 
+{
   return <AuthProvider><Root /></AuthProvider>;
 }

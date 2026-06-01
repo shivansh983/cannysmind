@@ -52,7 +52,6 @@ async function login(req, res) {
 
     const { userName, password } = validation.data;
     
-    // We now extract 'role' from your login service as well
     const { clientId, token, role } = await loginClient(userName, password);
 
     const cookieValue = `${clientId}.${token}`;
@@ -63,13 +62,12 @@ async function login(req, res) {
       maxAge: 24 * 60 * 60 * 1000
     });
 
-    // THIS IS THE FIX: We send the user object back with the cookie
     return res.status(200).json({ 
       message: 'Login successful', 
       cookieValue,
       user: {
         id: clientId,
-        role: role || 'user' // Default to 'user' if not found
+        role: role || 'user' 
       }
     });
   } catch (error) {

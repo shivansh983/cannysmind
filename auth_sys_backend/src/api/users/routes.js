@@ -6,15 +6,25 @@ const { Op } = require('sequelize');
 
 router.get('/search', protect, requireRole('manager', 'admin'), async (req, res) => {
   try {
-    const { q } = req.query;
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ users: [] });
+
     const users = await db.User.findAll({
-      where: { 
-        name: { [Op.like]: `${q}%` } 
+      where: {
+        role: 'user',
+        [Op.or]: [
+          { name: { [Op.iLike]: `${q}%` } },
+          { userName: { [Op.iLike]: `${q}%` } }
+        ]
       },
-      attributes: ['id', 'name']
+      attributes: ['id', 'name', 'userName', 'role'],
+      order: [['name', 'ASC']],
+      limit: 20
     });
+
     res.json({ users });
   } catch (err) {
+    console.error('User search failed:', err);
     res.status(500).json({ message: 'Search failed' });
   }
 });
