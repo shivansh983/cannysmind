@@ -13,9 +13,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Svg, { Path, Circle, Rect, Line, Polyline } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ─── API ────────────
-const API_BASE = 'http://localhost:8000/api'
+const API_BASE = 'http://192.168.29.152:8000/api'
 //const API_BASE = 'http://10.0.2.2:8000/api';
 
 const buildHeaders = (cookie: string) => {
@@ -1325,56 +1327,114 @@ function CreateLocationModal({ visible, onClose, onCreated, theme, cookie }: { v
 
   const takePhoto = async () => {
     if (!(await getPermissions())) return;
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 1 }); 
+    
     if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-      setLoading(true);
+      setLoading(true); 
       try {
+        // 👇 THE COMPRESSION MAGIC 👇
+        const manipResult = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 800 } }], 
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } 
+        );
+
+        setImageUri(manipResult.uri); 
+
         const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         setCoords({ lat: location.coords.latitude, lng: location.coords.longitude });
-      } catch (err) { Alert.alert('Location Error', 'Could not fetch GPS.'); } finally { setLoading(false); }
+      } catch (err) { 
+        Alert.alert('Error', 'Could not process image or fetch GPS.'); 
+      } finally { 
+        setLoading(false); 
+      }
     }
   };
 
   const pickFromGallery = async () => {
     if (!(await getPermissions())) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 1 });
+    
     if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
       setLoading(true);
       try {
+        const manipResult = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 800 } }],
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+        );
+
+        setImageUri(manipResult.uri);
+
         const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         setCoords({ lat: location.coords.latitude, lng: location.coords.longitude });
-      } catch (err) { Alert.alert('Location Error', 'Could not fetch GPS.'); } finally { setLoading(false); }
+      } catch (err) { 
+        Alert.alert('Error', 'Could not process image or fetch GPS.'); 
+      } finally { 
+        setLoading(false); 
+      }
     }
   };
 
   const submit = async () => {
     if (!name.trim() || !imageUri || !coords) return Alert.alert('Required', 'Name, Photo, and GPS are required.');
     setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('name', name.trim());
-      formData.append('description', description.trim());
-      formData.append('latitude', String(coords.lat));
-      formData.append('longitude', String(coords.lng));
 
-    if (Platform.OS === 'web') {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      (formData as any).append('image', blob, 'photo.jpg');  
+    try {
+      if (Platform.OS === 'web') {
+        // Web can still use standard fetch safely
+        const formData = new FormData();
+        formData.append('name', name.trim());
+        formData.append('description', description.trim() || ' ');
+        formData.append('latitude', String(coords.lat));
+        formData.append('longitude', String(coords.lng));
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        (formData as any).append('image', blob, 'photo.jpg');  
+        
+        const data = await api.authPostForm('/location', formData, cookie ?? '');
+        if (data.location) { setName(''); setDescription(''); setImageUri(null); setCoords(null); onCreated(); onClose(); }
+        else { Alert.alert('Failed', data.error || 'Could not save location.'); }
       } 
       else {
-      const filename = imageUri.split('/').pop() || 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
-      formData.append('image', { uri: imageUri, name: filename, type } as any);
-    }
+        // 👇 THE FIX: Android/iOS Native Upload (Bypasses fetch entirely) 👇
+        const validUri = !imageUri.startsWith('file://') ? `file://${imageUri}` : imageUri;
+        const clientId = cookie ? cookie.split('.')[0] : '';
 
-      const data = await api.authPostForm('/location', formData, cookie);
-      if (data.location) { setName(''); setDescription(''); setImageUri(null); setCoords(null); onCreated(); onClose(); }
-      else { Alert.alert('Failed', data.error || 'Could not save location.'); }
-    } catch (e) { Alert.alert('Error', 'Connection failed.'); } finally { setLoading(false); }
+        // This uses native Android networking, guaranteeing the file sends instantly
+        const uploadResult = await FileSystem.uploadAsync(`${API_BASE}/location`, validUri, {
+          fieldName: 'image',
+         httpMethod: 'POST',
+          uploadType: 1 as any, // 1 is Expo's internal code for MULTIPART
+          parameters: {
+            name: name.trim(),
+            description: description.trim() || ' ',
+            latitude: String(coords.lat),
+            longitude: String(coords.lng),
+          },
+          headers: {
+            'Authorization': `Bearer ${cookie}`,
+            'client-id': clientId,
+          },
+        });
+
+        // The native uploader returns the response as a string, so we parse it back to JSON
+        const data = JSON.parse(uploadResult.body);
+
+        if (uploadResult.status === 201 || data.location) { 
+          setName(''); setDescription(''); setImageUri(null); setCoords(null); 
+          onCreated(); 
+          onClose(); 
+        } else { 
+          Alert.alert('Failed', data.error || 'Could not save location.'); 
+        }
+      }
+    } catch (e) {
+      console.error("NATIVE UPLOAD CRASH:", e);
+      Alert.alert('Error', 'Connection failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
