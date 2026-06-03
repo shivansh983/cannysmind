@@ -542,7 +542,7 @@ function TaskDetailModal({ task, visible, onClose, onRefresh, theme, cookie, rol
       const res = await fetch(`${API_BASE}${url}`, {
         method,
         headers: buildHeaders(cookie),
-        body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       
