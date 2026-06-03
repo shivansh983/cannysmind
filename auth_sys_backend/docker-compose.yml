@@ -1,7 +1,0 @@
-services:
-  redis:
-    image: redis:latest
-    container_name: auth-redis
-    ports:
-     - "6380:6379"
-    restart: always
